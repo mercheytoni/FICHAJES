@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d4ed8">
+<title>FichajeGPS</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{--blue:#1d4ed8;--blue-d:#1e3a8a;--blue-l:#dbeafe;--green:#16a34a;--red:#dc2626;--amber:#d97706;--bg:#f1f5f9;--card:#fff;--tx:#0f172a;--mut:#64748b;--bd:#e2e8f0;--r:16px}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;line-height:1.4}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+input,select{font:inherit;color:inherit}
+a{color:var(--blue)}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+.narrow{max-width:520px}
+.card{background:var(--card);border-radius:var(--r);padding:18px;box-shadow:0 1px 3px rgba(15,23,42,.08);margin-bottom:14px}
+.mut{color:var(--mut)}.small{font-size:.85rem}
+h1{font-size:2.2rem}h2{font-size:1.25rem;margin-bottom:10px}h3{font-size:1.05rem;margin-bottom:8px}
+label{display:block;font-size:.85rem;font-weight:600;margin-bottom:10px;color:#334155}
+input,select{width:100%;margin-top:4px;padding:11px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;font-size:1rem}
+input:focus,select:focus{outline:2px solid var(--blue-l);border-color:var(--blue)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--blue);color:#fff;padding:11px 18px;border-radius:12px;font-weight:600;min-height:44px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:6px 12px;min-height:34px;font-size:.85rem;border-radius:9px}
+.btn.ghost{background:#e2e8f0;color:var(--tx)}
+.btn.ghostw{background:rgba(255,255,255,.18);color:#fff}
+.btn.danger{background:var(--red)}.btn.green{background:var(--green)}.btn.amber{background:var(--amber)}
+.btn.big{width:100%;font-size:1.1rem;padding:16px;border-radius:16px}
+.btn.white{background:#fff;color:var(--blue-d)}
+.btn.outline{background:transparent;border:2px solid #fff;color:#fff}
+.btn.busy{opacity:.6;pointer-events:none}
+.link{color:var(--blue);font-weight:600;padding:8px 0}
+.hero .link{color:#fff;opacity:.85}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row.end{justify-content:flex-end;margin-top:12px}.row.between{justify-content:space-between}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hero{background:linear-gradient(160deg,var(--blue-d),var(--blue));color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;gap:14px}
+.hero .lead{opacity:.9;max-width:340px}
+.stack{width:100%;max-width:340px;display:flex;flex-direction:column;gap:12px;margin-top:14px}
+.logo-big svg{width:116px;height:116px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.3))}
+.logo-sm svg{width:56px;height:56px;margin-bottom:8px}
+.credit{text-align:center;margin:18px auto 8px;font-size:.9rem;color:var(--mut)}
+.credit b{background:linear-gradient(90deg,#f59e0b,#ef4444);-webkit-background-clip:text;background-clip:text;color:transparent;font-size:1.05rem;letter-spacing:.08em;padding:0 2px}
+.credit.light{color:rgba(255,255,255,.85);margin-top:28px}
+.credit.light b{background:#fff;-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
+.credit.light b{background:linear-gradient(90deg,#fde68a,#fff);-webkit-background-clip:text;background-clip:text}
+.top{background:linear-gradient(90deg,var(--blue-d),var(--blue));color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:5}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700}.brand svg{width:32px;height:32px}
+.top select{width:auto;max-width:46vw;margin:0;padding:6px 8px;font-size:.85rem}
+.tabs2{display:flex;background:#e2e8f0;border-radius:12px;padding:4px;margin-bottom:14px}
+.tabs2 button{flex:1;padding:9px;border-radius:9px;font-weight:600;font-size:.9rem;color:var(--mut)}
+.tabs2 button.on{background:#fff;color:var(--blue);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 0 12px}
+.tabs button{padding:9px 14px;border-radius:999px;background:#e2e8f0;font-weight:600;font-size:.9rem;white-space:nowrap}
+.tabs button.on{background:var(--blue);color:#fff}
+.clock{font-size:2.6rem;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;color:var(--blue-d)}
+.date{text-align:center;color:var(--mut);text-transform:capitalize;margin-bottom:8px}
+.state{display:block;text-align:center;margin:8px auto 14px;width:fit-content}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:700;color:#fff;background:var(--mut)}
+.b-entrada,.b-trabajando{background:var(--green)}.b-salida,.b-fuera{background:var(--red)}.b-pausa{background:var(--amber)}.b-reanudar{background:var(--blue)}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btns .full{grid-column:1/-1}
+.btns .btn{padding:20px 10px;font-size:1.15rem;border-radius:18px}
+.stat{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--bd)}
+.day{font-weight:700;color:var(--mut);margin:14px 0 4px;font-size:.85rem;text-transform:capitalize}
+.item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--bd)}
+.item .t{font-variant-numeric:tabular-nums;font-weight:700}
+.item .sp{flex:1;min-width:0}
+.item .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item.new{animation:flash 2.5s}
+@keyframes flash{from{background:#bbf7d0}to{background:transparent}}
+.emps{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:14px}
+.emp{background:#fff;border-radius:14px;padding:12px;box-shadow:0 1px 3px rgba(15,23,42,.08)}
+.emp b{display:block;margin-bottom:4px}
+.counts{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.counts div{flex:1;min-width:90px;background:#fff;border-radius:14px;padding:10px;text-align:center;box-shadow:0 1px 3px rgba(15,23,42,.08)}
+.counts strong{display:block;font-size:1.6rem}
+.rt{font-size:.8rem;font-weight:700}.rt.on{color:var(--green)}.rt.off{color:var(--amber)}
+.tw{overflow-x:auto;background:#fff;border-radius:14px}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap}
+th{background:#f8fafc;font-size:.75rem;text-transform:uppercase;color:var(--mut)}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;align-items:end}
+.filters label{margin:0}
+.mback{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+.mbox{background:#fff;border-radius:18px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow:auto}
+#toasts{position:fixed;left:0;right:0;bottom:16px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:60;pointer-events:none;padding:0 12px}
+.toast{background:#0f172a;color:#fff;padding:11px 16px;border-radius:12px;font-size:.92rem;max-width:480px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.toast.err{background:var(--red)}.toast.ok{background:var(--green)}
+.empty{text-align:center;color:var(--mut);padding:24px}
+.spin{text-align:center;padding:60px 0;color:var(--mut)}
+@media print{.top,.tabs,.btn{display:none}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modal"></div>
+<div id="toasts"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+"use strict";
+/* =====================================================================
+   FichajeGPS · aplicación completa en un único index.html
+   Backend: Supabase (Auth + Postgres + Realtime). Ver README.md y supabase/schema.sql
+   ===================================================================== */
+
+/* ---------- 1. CONFIGURACIÓN ----------
+   Rellena estos 3 valores (o déjalos vacíos y la app te los pedirá al abrirla).
+   SUPABASE_URL      → Supabase › Project Settings › API › Project URL
+   SUPABASE_ANON_KEY → Supabase › Project Settings › API › anon public key
+   APP_URL           → URL pública donde alojes este index.html (para los enlaces de invitación) */
+const CONFIG = {
+  SUPABASE_URL: "https://gsnoxdharmmquqtrofji.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdzbm94ZGhhcm1tcXVxdHJvZmppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0NzY0MDYsImV4cCI6MjEwOTA1MjQwNn0.nzk-pH3qUjy-Xz4gOoNKZEhzrnhn7dIFoMsD9YqEUOM",
+  APP_URL: "https://mercheytoni.github.io/FICHAJES/"
+};
+
+const LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#1d4ed8"/><path d="M256 66C174 66 108 130 108 212c0 106 148 236 148 236s148-130 148-236C404 130 338 66 256 66z" fill="#fff"/><circle cx="256" cy="212" r="88" fill="#1d4ed8"/><circle cx="256" cy="212" r="70" fill="none" stroke="#fff" stroke-width="10"/><path d="M256 160v52l36 22" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><circle cx="378" cy="378" r="76" fill="#16a34a" stroke="#1d4ed8" stroke-width="14"/><path d="M342 380l28 28 50-58" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+(function(){ const l=document.createElement('link'); l.rel='icon'; l.href='data:image/svg+xml,'+encodeURIComponent(LOGO); document.head.appendChild(l); })();
+
+/* ---------- 2. UTILIDADES ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const LS = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+const TIPOS = { entrada:{l:'Entrada'}, salida:{l:'Salida'}, pausa:{l:'Pausa'}, reanudar:{l:'Reanuda'} };
+const estadoDe = t => (t==='entrada'||t==='reanudar') ? 'trabajando' : t==='pausa' ? 'pausa' : 'fuera';
+const ESTADO_L = { trabajando:'Trabajando', pausa:'En pausa', fuera:'Fuera' };
+const fDate = iso => new Date(iso).toLocaleDateString('es-ES');
+const fTime = iso => new Date(iso).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const fDay = iso => new Date(iso).toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
+const isoDay = d => new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+const fd = form => Object.fromEntries(new FormData(form));
+const mapUrl = (la,lo) => `https://www.google.com/maps?q=${la},${lo}`;
+const fmtDur = ms => { const m=Math.floor(ms/60000); return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'; };
+const randToken = () => Array.from(crypto.getRandomValues(new Uint8Array(18))).map(b=>b.toString(16).padStart(2,'0')).join('');
+
+function deviceName(){
+  const ua=navigator.userAgent;
+  const os=/Android/.test(ua)?'Android':/iPhone|iPad/.test(ua)?'iOS':/Windows/.test(ua)?'Windows':/Mac/.test(ua)?'macOS':/Linux/.test(ua)?'Linux':'Otro';
+  let br=/Edg\//.test(ua)?'Edge':/Chrome\//.test(ua)?'Chrome':/Firefox\//.test(ua)?'Firefox':/Safari\//.test(ua)?'Safari':'WebView';
+  if(/; wv\)/.test(ua)) br='App Android';
+  return os+' · '+br;
+}
+function toast(m,t){ const d=document.createElement('div'); d.className='toast '+(t||''); d.textContent=m; $('toasts').appendChild(d); setTimeout(()=>d.remove(),4200); }
+function render(html){ $('app').innerHTML=html; window.scrollTo(0,0); }
+const credit = light => `<div class="credit${light?' light':''}">Aplicación creada por <b>GORDY</b></div>`;
+const spinner = () => `<div class="spin">Cargando…</div>`;
+
+function modal(html){ $('modal').innerHTML=`<div class="mback"><div class="mbox">${html}</div></div>`; }
+function closeModal(){ $('modal').innerHTML=''; }
+function dialogForm(title, fields, okText='Guardar'){
+  return new Promise(res=>{
+    modal(`<h3>${esc(title)}</h3><form id="mf">${fields.map(f=>{
+      if(f.type==='select') return `<label>${esc(f.label)}<select name="${f.name}">${f.options.map(o=>`<option value="${o[0]}" ${String(o[0])===String(f.value)?'selected':''}>${esc(o[1])}</option>`).join('')}</select></label>`;
+      return `<label>${esc(f.label)}<input name="${f.name}" type="${f.type||'text'}" value="${esc(f.value||'')}" ${f.min?`min="${f.min}"`:''} ${f.required===false?'':'required'}></label>`;
+    }).join('')}<div class="row end"><button type="button" class="btn ghost" id="mc">Cancelar</button><button class="btn">${esc(okText)}</button></div></form>`);
+    $('mf').onsubmit=e=>{ e.preventDefault(); const v=fd($('mf')); closeModal(); res(v); };
+    $('mc').onclick=()=>{ closeModal(); res(null); };
+  });
+}
+function confirmDlg(msg, okText='Eliminar'){
+  return new Promise(res=>{
+    modal(`<h3>Confirmar</h3><p>${esc(msg)}</p><div class="row end"><button class="btn ghost" id="mc">Cancelar</button><button class="btn danger" id="mo">${esc(okText)}</button></div>`);
+    $('mc').onclick=()=>{ closeModal(); res(false); };
+    $('mo').onclick=()=>{ closeModal(); res(true); };
+  });
+}
+function copyText(txt){
+  if(navigator.clipboard&&window.isSecureContext) return navigator.clipboard.writeText(txt);
+  const i=document.createElement('input'); i.value=txt; document.body.appendChild(i); i.select(); document.execCommand('copy'); i.remove(); return Promise.resolve();
+}
+function loadScript(src){ return new Promise((ok,ko)=>{ const s=document.createElement('script'); s.src=src; s.onload=ok; s.onerror=()=>ko(new Error('No se pudo cargar '+src)); document.head.appendChild(s); }); }
+function download(name, content, mime){
+  const blob=new Blob([content],{type:mime}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+function authMsg(e){
+  const m=(e&&e.message)||String(e);
+  if(/Invalid login/i.test(m)) return 'Email o contraseña incorrectos.';
+  if(/not confirmed/i.test(m)) return 'Confirma tu email antes de entrar (revisa tu correo).';
+  if(/already registered/i.test(m)) return 'Ese email ya está registrado. Usa «Ya tengo cuenta».';
+  if(/Password should be/i.test(m)) return 'La contraseña debe tener al menos 6 caracteres.';
+  if(/rate limit/i.test(m)) return 'Demasiados intentos. Espera unos minutos.';
+  return m;
+}
+
+/* ---------- 3. ESTADO Y SUPABASE ---------- */
+const S = { session:null, perfil:null, empresas:[], empresaId:null, empNombre:'', emps:[], live:[], rows:[], invites:[], mine:[],
+            tab:'live', rt:'', timers:[], channel:null, fresh:null, invMode:'new', inv:null, loginRole:'employee', loginTab:'login', flt:null };
+let sb = null;
+
+function cfg(){ return { url: CONFIG.SUPABASE_URL||LS.get('fgps_url')||'', key: CONFIG.SUPABASE_ANON_KEY||LS.get('fgps_key')||'', app: CONFIG.APP_URL||LS.get('fgps_app')||'' }; }
+const isPreset = () => !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY);
+function initSB(){
+  if(sb) return true;
+  const c=cfg(); if(!c.url||!c.key||!window.supabase) return false;
+  sb=window.supabase.createClient(c.url,c.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  return true;
+}
+function inviteUrl(rol,token){
+  const c=cfg(); let base=c.app||(/^https?:/.test(location.protocol)?location.href.split('#')[0]:'');
+  if(!base){ toast('Configura la URL pública de la app (⚙️ en la pantalla inicial) para que los enlaces funcionen','err'); base=location.href.split('#')[0]; }
+  return base+'#/invite/'+(rol==='admin'?'admin':'employee')+'/'+token;
+}
+function clearTimers(){ S.timers.forEach(clearInterval); S.timers=[]; }
+function unsubscribeRT(){ if(S.channel&&sb){ sb.removeChannel(S.channel); } S.channel=null; S.rt=''; }
+
+/* ---------- 4. SESIÓN Y ROUTER ---------- */
+async function applyPending(p){
+  const r = p.tipo==='registro'
+    ? await sb.rpc('registrar_empresa',{p_nombre_admin:p.nombre,p_nombre_empresa:p.empresa})
+    : await sb.rpc('aceptar_invitacion',{p_token:p.token,p_nombre:p.nombre,p_empresa_nombre:p.empresa||null});
+  if(r.error) throw r.error;
+  return r.data;
+}
+async function loadSession(){
+  const {data}=await sb.auth.getSession();
+  S.session=data.session; S.perfil=null;
+  if(!S.session) return;
+  const q=await sb.from('usuarios').select('*').eq('id',S.session.user.id).maybeSingle();
+  S.perfil=q.data||null;
+  if(!S.perfil){
+    let p=null; try{ p=JSON.parse(LS.get('fgps_pending')||'null'); }catch(e){}
+    if(p){
+      LS.del('fgps_pending');
+      try{ await applyPending(p); const q2=await sb.from('usuarios').select('*').eq('id',S.session.user.id).maybeSingle(); S.perfil=q2.data||null; }
+      catch(e){ toast(e.message,'err'); }
+    }
+  }
+}
+function go(p){ const t='#'+p; if(location.hash===t) route(); else location.hash=t; }
+
+async function route(){
+  clearTimers(); unsubscribeRT(); closeModal();
+  const parts=(location.hash.replace(/^#/,'')||'/').split('/').filter(Boolean);
+  if(parts[0]==='setup') return renderSetup();
+  if(!initSB()) return renderSetup();
+  render(spinner());
+  try{ await loadSession(); }catch(e){ toast(e.message,'err'); }
+  if(parts[0]==='invite'&&parts[2]) return renderInvite(parts[2]);
+  if(parts[0]==='login'){ if(S.perfil) return go('/app'); S.loginRole=parts[1]==='admin'?'admin':'employee'; return renderLogin(); }
+  if(parts[0]==='app'){
+    if(!S.session) return go('/');
+    if(!S.perfil) return renderNoProfile();
+    return S.perfil.rol==='admin' ? renderAdmin() : renderEmployee();
+  }
+  if(S.session&&S.perfil) return go('/app');
+  if(S.session&&!S.perfil) return renderNoProfile();
+  renderHome();
+}
+window.addEventListener('hashchange',route);
+
+/* ---------- 5. PANTALLAS PÚBLICAS ---------- */
+function renderHome(){
+  render(`<div class="hero">
+    <div class="logo-big">${LOGO}</div>
+    <h1>FichajeGPS</h1>
+    <p class="lead">Control horario con geolocalización en tiempo real</p>
+    <div class="stack">
+      <button class="btn big white" data-go="/login/employee">👷 Soy Empleado</button>
+      <button class="btn big outline" data-go="/login/admin">🛡️ Soy Administrador</button>
+    </div>
+    ${isPreset()?'':'<button class="link" data-go="/setup">⚙️ Configurar conexión</button>'}
+    ${credit(true)}
+  </div>`);
+}
+function renderSetup(){
+  const c=cfg();
+  render(`<div class="wrap narrow"><button class="link" data-go="/">← Volver</button>
+    <div class="card"><h2>Conexión con Supabase</h2>
+    <p class="mut small" style="margin-bottom:12px">Copia estos datos desde Supabase › Project Settings › API. La clave <b>anon</b> es pública; nunca uses la <i>service_role</i>.</p>
+    <form data-submit="saveSetup">
+      <label>URL del proyecto<input name="url" required placeholder="https://xxxx.supabase.co" value="${esc(c.url)}"></label>
+      <label>Clave anon (public)<input name="key" required value="${esc(c.key)}"></label>
+      <label>URL pública de esta app (para los enlaces de invitación)<input name="app" placeholder="https://mi-app.netlify.app/" value="${esc(c.app)}"></label>
+      <button class="btn" style="width:100%">Guardar</button>
+    </form></div>${credit()}</div>`);
+}
+function renderLogin(){
+  const adm=S.loginRole==='admin'; const tab=adm&&S.loginTab==='register'?'register':'login';
+  render(`<div class="wrap narrow"><button class="link" data-go="/">← Volver</button>
+    <div class="card"><div class="logo-sm">${LOGO}</div><h2>${adm?'Acceso administrador':'Acceso empleado'}</h2>
+    ${adm?`<div class="tabs2"><button class="${tab==='login'?'on':''}" data-act="loginTab" data-t="login">Entrar</button><button class="${tab==='register'?'on':''}" data-act="loginTab" data-t="register">Crear mi empresa</button></div>`:''}
+    ${tab==='login'?`<form data-submit="doLogin">
+        <label>Email<input type="email" name="email" required autocomplete="username"></label>
+        <label>Contraseña<input type="password" name="password" required autocomplete="current-password"></label>
+        <button class="btn" style="width:100%">Entrar</button></form>`
+      :`<form data-submit="doRegisterCompany">
+        <label>Tu nombre<input name="nombre" required></label>
+        <label>Nombre de la empresa<input name="empresa" required></label>
+        <label>Email<input type="email" name="email" required autocomplete="username"></label>
+        <label>Contraseña (mín. 6)<input type="password" name="password" minlength="6" required autocomplete="new-password"></label>
+        <button class="btn" style="width:100%">Crear empresa y cuenta</button></form>`}
+    ${!adm?'<p class="mut small" style="margin-top:12px">¿Tu empresa te envió un enlace de invitación? Ábrelo para crear tu cuenta.</p>':''}
+    </div>${credit()}</div>`);
+}
+function showInfo(title,msg){
+  render(`<div class="wrap narrow"><div class="card"><div class="logo-sm">${LOGO}</div><h2>${esc(title)}</h2><p>${esc(msg)}</p>
+  <div class="row end"><button class="btn" data-go="/">Aceptar</button></div></div>${credit()}</div>`);
+}
+function renderNoProfile(){
+  render(`<div class="wrap narrow"><div class="card"><div class="logo-sm">${LOGO}</div><h2>Tu cuenta no está asociada a ninguna empresa</h2>
+    <p class="mut small" style="margin-bottom:12px">Si eres empleado, abre el enlace de invitación que te envió tu empresa. Si vas a administrar una empresa, créala aquí:</p>
+    <form data-submit="doRegisterExisting">
+      <label>Tu nombre<input name="nombre" required></label>
+      <label>Nombre de la empresa<input name="empresa" required></label>
+      <button class="btn" style="width:100%">Crear mi empresa</button></form>
+    <div class="row end"><button class="btn ghost sm" data-act="logout">Cerrar sesión</button></div></div>${credit()}</div>`);
+}
+
+/* ---- Invitaciones ---- */
+async function renderInvite(token){
+  const {data,error}=await sb.rpc('get_invitacion',{p_token:token});
+  if(error||!data||!data.valida){
+    const m={caducada:'Este enlace ha caducado. Pide uno nuevo.',agotada:'Este enlace ya se ha utilizado el máximo de veces.',no_existe:'El enlace no es válido.'};
+    return render(`<div class="wrap narrow"><div class="card"><div class="logo-sm">${LOGO}</div><h2>Invitación no disponible</h2><p>${esc(m[data&&data.motivo]||(error&&error.message)||m.no_existe)}</p><div class="row end"><button class="btn" data-go="/">Ir al inicio</button></div></div>${credit()}</div>`);
+  }
+  S.inv={token,...data}; S.invMode='new'; drawInvite();
+}
+function drawInvite(){
+  const d=S.inv, isAdmin=d.rol==='admin', logged=!!S.session;
+  let body;
+  if(logged&&(!S.perfil||(S.perfil.rol==='admin'&&isAdmin))){
+    body=`<form data-submit="doInvite">
+      ${S.perfil?'':'<label>Tu nombre<input name="nombre" required></label>'}
+      ${isAdmin?'<label>Nombre de tu empresa<input name="empresa" required></label>':''}
+      <button class="btn" style="width:100%">${isAdmin?'Crear mi empresa':'Unirme a la empresa'}</button></form>`;
+  } else if(logged){
+    body=`<p>Ya has iniciado sesión con otra cuenta que no puede usar esta invitación.</p><div class="row end"><button class="btn ghost" data-act="logout">Cerrar sesión</button></div>`;
+  } else {
+    const nw=S.invMode==='new';
+    body=`<div class="tabs2"><button class="${nw?'on':''}" data-act="invTab" data-t="new">Crear cuenta</button><button class="${nw?'':'on'}" data-act="invTab" data-t="login">Ya tengo cuenta</button></div>
+      <form data-submit="doInvite">
+        <label>Tu nombre${nw?'':' (si es tu primera vez)'}<input name="nombre" ${nw?'required':''}></label>
+        ${isAdmin?'<label>Nombre de tu empresa<input name="empresa" required></label>':''}
+        <label>Email<input type="email" name="email" required autocomplete="username"></label>
+        <label>Contraseña${nw?' (mín. 6)':''}<input type="password" name="password" required minlength="${nw?6:1}" autocomplete="${nw?'new-password':'current-password'}"></label>
+        <button class="btn" style="width:100%">${nw?'Crear cuenta y continuar':'Entrar y continuar'}</button></form>`;
+  }
+  render(`<div class="wrap narrow"><div class="card"><div class="logo-sm">${LOGO}</div>
+    <h2>${isAdmin?'Invitación de administrador':'Invitación de empleado'}</h2>
+    <p class="mut" style="margin-bottom:14px">${isAdmin?'Crea tu propia empresa y gestiona a tus empleados.':'Te han invitado a <b>'+esc(d.empresa||'una empresa')+'</b> para registrar tu jornada con GPS.'}</p>
+    ${body}</div>${credit()}</div>`);
+}
+
+/* ---------- 6. PANEL DEL EMPLEADO ---------- */
+function getPos(){
+  return new Promise((res,rej)=>{
+    if(!navigator.geolocation) return rej(new Error('Tu dispositivo no soporta geolocalización.'));
+    navigator.geolocation.getCurrentPosition(res,e=>{
+      const m={1:'Permiso de ubicación denegado. Actívalo en los ajustes para poder fichar.',2:'No se pudo obtener la ubicación. Comprueba que el GPS esté activado.',3:'Tiempo de espera agotado al obtener el GPS. Inténtalo de nuevo.'};
+      rej(new Error(m[e.code]||e.message));
+    },{enableHighAccuracy:true,timeout:20000,maximumAge:0});
+  });
+}
+function workedMs(listAsc){
+  let ms=0,start=null;
+  for(const f of listAsc){
+    const t=new Date(f.ts).getTime();
+    if(f.tipo==='entrada'||f.tipo==='reanudar') start=t;
+    else if((f.tipo==='pausa'||f.tipo==='salida')&&start!==null){ ms+=t-start; start=null; }
+  }
+  if(start!==null) ms+=Date.now()-start;
+  return ms;
+}
+const todayList = () => { const k=new Date().toDateString(); return S.mine.filter(f=>new Date(f.ts).toDateString()===k).reverse(); };
+
+async function renderEmployee(){
+  render(`<header class="top"><div class="brand">${LOGO}<span>FichajeGPS</span></div><button class="btn sm ghostw" data-act="logout">Salir</button></header><main class="wrap narrow" id="emp">${spinner()}</main>${credit()}`);
+  const [h,e]=await Promise.all([
+    sb.from('fichajes').select('*').eq('usuario_id',S.session.user.id).order('ts',{ascending:false}).limit(100),
+    sb.from('empresas').select('nombre').eq('id',S.perfil.empresa_id).maybeSingle()
+  ]);
+  S.mine=h.data||[]; S.empNombre=(e.data&&e.data.nombre)||'';
+  drawEmp();
+  S.timers.push(setInterval(tickEmp,1000));
+  if(navigator.permissions&&navigator.permissions.query){
+    navigator.permissions.query({name:'geolocation'}).then(p=>{ const el=$('gps'); if(el) el.textContent={granted:'GPS permitido ✔',denied:'GPS bloqueado ✖ (actívalo en ajustes)',prompt:'Se pedirá permiso de ubicación al fichar'}[p.state]||''; }).catch(()=>{});
+  }
+}
+function tickEmp(){
+  const c=$('clock'); if(!c) return; const n=new Date();
+  c.textContent=n.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const w=$('worked'); if(w) w.textContent=fmtDur(workedMs(todayList()));
+}
+function drawEmp(){
+  const est=estadoDe(S.mine[0]&&S.mine[0].tipo);
+  let hist='',last='';
+  for(const f of S.mine){
+    const day=fDay(f.ts); if(day!==last){ hist+=`<div class="day">${esc(day)}</div>`; last=day; }
+    hist+=`<div class="item"><span class="badge b-${f.tipo}">${TIPOS[f.tipo].l}</span><span class="t">${fTime(f.ts)}</span><span class="sp mut small">${f.precision_gps!=null?'±'+Math.round(f.precision_gps)+' m':''}</span><a class="small" target="_blank" rel="noopener" href="${mapUrl(f.latitud,f.longitud)}">📍 mapa</a></div>`;
+  }
+  $('emp').innerHTML=`
+    <div class="card">
+      <p class="mut small" style="text-align:center">${esc(S.perfil.nombre)} · ${esc(S.empNombre)}</p>
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="date">${new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+      <span class="badge state b-${est}" style="font-size:.95rem;padding:6px 16px">${ESTADO_L[est]}</span>
+      <div class="btns">
+        <button class="btn green" data-act="fichar" data-tipo="entrada" ${est!=='fuera'?'disabled':''}>▶ Entrar</button>
+        <button class="btn danger" data-act="fichar" data-tipo="salida" ${est==='fuera'?'disabled':''}>■ Salir</button>
+        ${est==='pausa'
+          ?'<button class="btn full" data-act="fichar" data-tipo="reanudar">⏵ Reanudar</button>'
+          :`<button class="btn amber full" data-act="fichar" data-tipo="pausa" ${est!=='trabajando'?'disabled':''}>⏸ Pausa</button>`}
+      </div>
+      <p class="mut small" id="gps" style="text-align:center;margin-top:10px"></p>
+      <div class="stat" style="margin-top:12px"><span class="mut">Trabajado hoy</span><b id="worked">0h 00m</b></div>
+    </div>
+    <div class="card"><h3>Mi historial</h3>${hist||'<div class="empty">Aún no tienes fichajes.</div>'}</div>`;
+  tickEmp();
+}
+
+/* ---------- 7. PANEL DEL ADMINISTRADOR ---------- */
+async function loadEmpresas(){
+  const {data}=await sb.from('empresas').select('*').eq('creada_por',S.session.user.id).order('created_at');
+  S.empresas=data||[];
+  const saved=LS.get('fgps_emp');
+  S.empresaId=(S.empresas.find(e=>e.id===S.empresaId)||S.empresas.find(e=>e.id===saved)||S.empresas[0]||{}).id||null;
+  if(S.empresaId) LS.set('fgps_emp',S.empresaId);
+}
+async function loadEmps(){
+  const {data}=await sb.from('usuarios').select('*').eq('empresa_id',S.empresaId).eq('rol','empleado').order('nombre');
+  S.emps=data||[];
+}
+async function loadLive(){
+  const since=new Date(Date.now()-48*3600e3).toISOString();
+  const {data}=await sb.from('fichajes').select('*').eq('empresa_id',S.empresaId).gte('ts',since).order('ts',{ascending:false}).limit(500);
+  S.live=data||[];
+}
+async function loadInvites(){
+  const {data}=await sb.from('invitaciones').select('*').eq('creada_por',S.session.user.id).order('created_at',{ascending:false}).limit(50);
+  S.invites=data||[];
+}
+function subscribeRT(){
+  unsubscribeRT();
+  if(!S.empresaId) return;
+  S.channel=sb.channel('fichajes-'+S.empresaId)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'fichajes',filter:'empresa_id=eq.'+S.empresaId},p=>onNewFichaje(p.new))
+    .subscribe(st=>{ S.rt=st; const el=$('rt'); if(el){ el.className='rt '+(st==='SUBSCRIBED'?'on':'off'); el.textContent=st==='SUBSCRIBED'?'● Tiempo real activo':'○ Conectando…'; } });
+}
+function onNewFichaje(f){
+  S.live=[f,...S.live.filter(x=>x.id!==f.id)].slice(0,500);
+  S.fresh=f.id; setTimeout(()=>{ S.fresh=null; },6000);
+  if(!S.emps.some(u=>u.id===f.usuario_id)) loadEmps().then(()=>{ if(S.tab==='live') drawTab(); });
+  if(S.tab==='live') drawTab();
+  toast(`${f.nombre}: ${TIPOS[f.tipo].l.toLowerCase()}`,'ok');
+}
+async function renderAdmin(){
+  render(`<header class="top"><div class="brand">${LOGO}<span>FichajeGPS</span></div><button class="btn sm ghostw" data-act="logout">Salir</button></header><main class="wrap">${spinner()}</main>`);
+  await loadEmpresas();
+  if(S.empresaId){ await Promise.all([loadEmps(),loadLive(),loadInvites()]); } else { S.emps=[]; S.live=[]; await loadInvites(); S.tab='empresas'; }
+  render(`<header class="top"><div class="brand">${LOGO}<span>FichajeGPS</span></div>
+      <div class="row">${S.empresas.length?`<select data-change="setEmpresa">${S.empresas.map(e=>`<option value="${e.id}" ${e.id===S.empresaId?'selected':''}>${esc(e.nombre)}</option>`).join('')}</select>`:''}
+      <button class="btn sm ghostw" data-act="logout">Salir</button></div></header>
+    <main class="wrap"><nav class="tabs" id="tabs"></nav><div id="tab"></div>${credit()}</main>`);
+  drawTabs(); drawTab();
+  if(S.empresaId){
+    subscribeRT();
+    S.timers.push(setInterval(async()=>{ if(S.tab==='live'&&S.rt!=='SUBSCRIBED'){ try{ await loadLive(); drawTab(); }catch(e){} } },20000));
+  }
+}
+function drawTabs(){
+  const T=[['live','En vivo'],['fich','Fichajes'],['emps','Empleados'],['inv','Invitaciones'],['empresas','Empresas']];
+  $('tabs').innerHTML=T.map(t=>`<button class="${S.tab===t[0]?'on':''}" data-act="tab" data-t="${t[0]}">${t[1]}</button>`).join('');
+}
+function drawTab(){
+  const el=$('tab'); if(!el) return;
+  if(!S.empresaId&&S.tab!=='empresas'&&S.tab!=='inv'){ el.innerHTML=`<div class="card empty">Primero crea una empresa en la pestaña «Empresas».</div>`; return; }
+  el.innerHTML = ({live:tabLive,fich:tabFich,emps:tabEmps,inv:tabInv,empresas:tabEmpresas})[S.tab]();
+  if(S.tab==='fich'&&!S.rows.length&&!S._searched){ S._searched=true; A.buscar($('fform')); }
+}
+
+function tabLive(){
+  const last=new Map(); for(const f of S.live) if(!last.has(f.usuario_id)) last.set(f.usuario_id,f);
+  const c={trabajando:0,pausa:0,fuera:0};
+  const cards=S.emps.filter(u=>u.activo).map(u=>{
+    const f=last.get(u.id), est=estadoDe(f&&f.tipo); c[est]++;
+    return `<div class="emp"><b>${esc(u.nombre)}</b><span class="badge b-${est}">${ESTADO_L[est]}</span>
+      <div class="mut small" style="margin-top:6px">${f?`${TIPOS[f.tipo].l} · ${fDate(f.ts)} ${fTime(f.ts)}<br><a target="_blank" rel="noopener" href="${mapUrl(f.latitud,f.longitud)}">📍 ver ubicación</a>`:'Sin fichajes recientes'}</div></div>`;
+  }).join('');
+  const feed=S.live.slice(0,40).map(f=>`<div class="item ${f.id===S.fresh?'new':''}"><span class="badge b-${f.tipo}">${TIPOS[f.tipo].l}</span><span class="sp"><div class="nm">${esc(f.nombre)}</div><div class="mut small">${fDate(f.ts)} · ±${f.precision_gps!=null?Math.round(f.precision_gps):'?'} m · ${esc(f.dispositivo||'')}</div></span><span class="t">${fTime(f.ts)}</span><a target="_blank" rel="noopener" href="${mapUrl(f.latitud,f.longitud)}">📍</a></div>`).join('');
+  return `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">En vivo</h2><span id="rt" class="rt ${S.rt==='SUBSCRIBED'?'on':'off'}">${S.rt==='SUBSCRIBED'?'● Tiempo real activo':'○ Conectando…'}</span></div>
+    <div class="counts"><div><strong style="color:var(--green)">${c.trabajando}</strong><span class="small mut">Trabajando</span></div><div><strong style="color:var(--amber)">${c.pausa}</strong><span class="small mut">En pausa</span></div><div><strong style="color:var(--red)">${c.fuera}</strong><span class="small mut">Fuera</span></div></div>
+    <div class="emps">${cards||'<div class="card empty" style="grid-column:1/-1">Aún no hay empleados. Invítalos desde la pestaña «Invitaciones».</div>'}</div>
+    <div class="card"><h3>Últimos fichajes</h3>${feed||'<div class="empty">Sin fichajes en las últimas 48 h.</div>'}</div>`;
+}
+function tabFich(){
+  const f=S.flt||(S.flt={emp:'',desde:isoDay(new Date(Date.now()-6*864e5)),hasta:isoDay(new Date()),hd:'00:00',hh:'23:59',tipo:''});
+  return `<div class="card"><h3>Filtros</h3><form id="fform" data-submit="buscar"><div class="filters">
+    <label>Empleado<select name="emp"><option value="">Todos</option>${S.emps.map(u=>`<option value="${u.id}" ${u.id===f.emp?'selected':''}>${esc(u.nombre)}</option>`).join('')}</select></label>
+    <label>Desde<input type="date" name="desde" value="${f.desde}"></label>
+    <label>Hasta<input type="date" name="hasta" value="${f.hasta}"></label>
+    <label>Hora desde<input type="time" name="hd" value="${f.hd}"></label>
+    <label>Hora hasta<input type="time" name="hh" value="${f.hh}"></label>
+    <label>Tipo<select name="tipo"><option value="">Todos</option>${Object.keys(TIPOS).map(k=>`<option value="${k}" ${k===f.tipo?'selected':''}>${TIPOS[k].l}</option>`).join('')}</select></label>
+    <button class="btn" style="margin-bottom:10px">Buscar</button></div></form></div>
+    <div id="res">${resHtml()}</div>`;
+}
+function resHtml(){
+  if(!S.rows.length) return `<div class="card empty">Sin resultados.</div>`;
+  return `<div class="row between" style="margin-bottom:8px"><span class="mut small">${S.rows.length} fichajes${S.rows.length>=1000?' (máx. 1000: acota el rango)':''}</span>
+    <span class="row"><button class="btn sm ghost" data-act="expCsv">⬇ CSV</button><button class="btn sm ghost" data-act="expPdf">⬇ PDF</button></span></div>
+    <div class="tw"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Empleado</th><th>Tipo</th><th>Ubicación</th><th>Precisión</th><th>Dispositivo</th></tr></thead><tbody>
+    ${S.rows.map(r=>`<tr><td>${fDate(r.ts)}</td><td>${fTime(r.ts)}</td><td>${esc(r.nombre)}</td><td><span class="badge b-${r.tipo}">${TIPOS[r.tipo].l}</span></td><td><a target="_blank" rel="noopener" href="${mapUrl(r.latitud,r.longitud)}">${(+r.latitud).toFixed(5)}, ${(+r.longitud).toFixed(5)}</a></td><td>${r.precision_gps!=null?'±'+Math.round(r.precision_gps)+' m':'—'}</td><td>${esc(r.dispositivo||'')}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+function tabEmps(){
+  return `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Empleados</h2><button class="btn sm" data-act="newInvite" data-rol="empleado">+ Invitar empleado</button></div>
+    ${S.emps.length?S.emps.map(u=>`<div class="card"><div class="row between"><div><b>${esc(u.nombre)}</b> ${u.activo?'':'<span class="badge">Inactivo</span>'}<div class="mut small">${esc(u.email)}</div></div>
+      <div class="row"><button class="btn sm ghost" data-act="editEmp" data-id="${u.id}">Editar</button><button class="btn sm ghost" data-act="toggleEmp" data-id="${u.id}">${u.activo?'Desactivar':'Activar'}</button><button class="btn sm danger" data-act="delEmp" data-id="${u.id}">Eliminar</button></div></div></div>`).join('')
+      :'<div class="card empty">Todavía no hay empleados. Genera un enlace de invitación.</div>'}`;
+}
+function tabInv(){
+  const now=Date.now();
+  return `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Invitaciones</h2></div>
+    <div class="card"><div class="row">
+      ${S.empresaId?'<button class="btn" data-act="newInvite" data-rol="empleado">🔗 Enlace de empleado</button>':''}
+      <button class="btn ghost" data-act="newInvite" data-rol="admin">🔗 Enlace de administrador</button></div>
+      <p class="mut small" style="margin-top:8px">Los enlaces son únicos, caducan y tienen un rol fijo. El de empleado solo da acceso a su propio fichaje; el de administrador permite crear una empresa nueva.</p></div>
+    ${S.invites.map(i=>{ const caduc=new Date(i.expira_en).getTime()<now, ago=i.usos>=i.max_usos; const emp=(S.empresas.find(e=>e.id===i.empresa_id)||{}).nombre;
+      return `<div class="card"><div class="row between"><div><span class="badge ${i.rol==='admin'?'b-reanudar':'b-entrada'}">${i.rol==='admin'?'Administrador':'Empleado'}</span> ${caduc?'<span class="badge">Caducado</span>':ago?'<span class="badge">Agotado</span>':''}
+      <div class="mut small" style="margin-top:4px">${emp?esc(emp)+' · ':''}Usos ${i.usos}/${i.max_usos} · caduca ${fDate(i.expira_en)}</div></div>
+      <div class="row">${caduc||ago?'':`<button class="btn sm ghost" data-act="copy" data-val="${esc(inviteUrl(i.rol,i.token))}">Copiar</button>`}<button class="btn sm danger" data-act="delInv" data-id="${i.id}">Revocar</button></div></div></div>`; }).join('')||'<div class="card empty">No has creado invitaciones.</div>'}`;
+}
+function tabEmpresas(){
+  return `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Empresas</h2><button class="btn sm" data-act="newEmpresa">+ Nueva empresa</button></div>
+    ${S.empresas.map(e=>`<div class="card"><div class="row between"><div><b>${esc(e.nombre)}</b> ${e.id===S.empresaId?'<span class="badge b-entrada">Activa</span>':''}</div>
+      <div class="row">${e.id===S.empresaId?'':`<button class="btn sm ghost" data-act="useEmpresa" data-id="${e.id}">Usar</button>`}<button class="btn sm ghost" data-act="renEmpresa" data-id="${e.id}">Renombrar</button><button class="btn sm danger" data-act="delEmpresa" data-id="${e.id}">Eliminar</button></div></div></div>`).join('')||'<div class="card empty">Crea tu primera empresa.</div>'}`;
+}
+
+/* ---------- 8. ACCIONES ---------- */
+const A = {
+  closeModal,
+  async saveSetup(f){ const v=fd(f); LS.set('fgps_url',v.url.trim()); LS.set('fgps_key',v.key.trim()); LS.set('fgps_app',v.app.trim()); location.hash='#/'; location.reload(); },
+  loginTab(el){ S.loginTab=el.dataset.t; renderLogin(); },
+  invTab(el){ S.invMode=el.dataset.t; drawInvite(); },
+  async doLogin(f){
+    const v=fd(f); const {error}=await sb.auth.signInWithPassword({email:v.email.trim(),password:v.password});
+    if(error) throw new Error(authMsg(error));
+    go('/app');
+  },
+  async doRegisterCompany(f){
+    const v=fd(f); const {data,error}=await sb.auth.signUp({email:v.email.trim(),password:v.password,options:{data:{nombre:v.nombre}}});
+    if(error) throw new Error(authMsg(error));
+    if(data.user&&data.user.identities&&data.user.identities.length===0) throw new Error('Ese email ya está registrado. Pulsa «Entrar».');
+    const pend={tipo:'registro',nombre:v.nombre.trim(),empresa:v.empresa.trim()};
+    if(data.session){ await applyPending(pend); toast('Empresa creada','ok'); go('/app'); }
+    else { LS.set('fgps_pending',JSON.stringify(pend)); showInfo('Revisa tu correo','Te hemos enviado un enlace para confirmar tu email. Después de confirmarlo, inicia sesión y tu empresa se creará automáticamente.'); }
+  },
+  async doRegisterExisting(f){ const v=fd(f); await applyPending({tipo:'registro',nombre:v.nombre.trim(),empresa:v.empresa.trim()}); toast('Empresa creada','ok'); go('/app'); },
+  async doInvite(f){
+    const v=fd(f), d=S.inv; const pend={tipo:'invite',token:d.token,nombre:(v.nombre||'').trim()||(S.perfil&&S.perfil.nombre)||'',empresa:(v.empresa||'').trim()};
+    if(!S.session){
+      if(S.invMode==='login'){
+        const {error}=await sb.auth.signInWithPassword({email:v.email.trim(),password:v.password}); if(error) throw new Error(authMsg(error));
+      } else {
+        const {data,error}=await sb.auth.signUp({email:v.email.trim(),password:v.password,options:{data:{nombre:v.nombre}}});
+        if(error) throw new Error(authMsg(error));
+        if(data.user&&data.user.identities&&data.user.identities.length===0) throw new Error('Ese email ya está registrado. Usa «Ya tengo cuenta».');
+        if(!data.session){ LS.set('fgps_pending',JSON.stringify(pend)); return showInfo('Revisa tu correo','Confirma tu email con el enlace que te hemos enviado y luego inicia sesión: tu invitación se aplicará automáticamente.'); }
+      }
+    }
+    await applyPending(pend);
+    toast('¡Listo!','ok'); go('/app');
+  },
+  async logout(){ unsubscribeRT(); clearTimers(); await sb.auth.signOut(); S.session=null; S.perfil=null; S.tab='live'; S._searched=false; S.rows=[]; go('/'); },
+
+  /* Empleado */
+  async fichar(el){
+    const tipo=el.dataset.tipo; el.classList.add('busy');
+    try{
+      toast('Obteniendo ubicación GPS…');
+      const pos=await getPos();
+      const {data,error}=await sb.rpc('fichar',{p_tipo:tipo,p_lat:pos.coords.latitude,p_lng:pos.coords.longitude,p_precision:pos.coords.accuracy,p_dispositivo:deviceName()});
+      if(error) throw error;
+      S.mine.unshift(data); drawEmp();
+      toast(`${TIPOS[tipo].l} registrada a las ${fTime(data.ts)}`,'ok');
+    } finally { el.classList.remove('busy'); }
+  },
+
+  /* Administrador */
+  tab(el){ S.tab=el.dataset.t; drawTabs(); drawTab(); },
+  async setEmpresa(el){ S.empresaId=el.value; LS.set('fgps_emp',el.value); S.rows=[]; S._searched=false; S.flt=null; renderAdmin(); },
+  async buscar(form){
+    const f=fd(form); S.flt=f; const res=$('res'); if(res) res.innerHTML='<div class="spin">Buscando…</div>';
+    let q=sb.from('fichajes').select('*').eq('empresa_id',S.empresaId).order('ts',{ascending:false}).limit(1000);
+    if(f.desde) q=q.gte('ts',new Date(f.desde+'T00:00:00').toISOString());
+    if(f.hasta) q=q.lte('ts',new Date(f.hasta+'T23:59:59.999').toISOString());
+    if(f.emp) q=q.eq('usuario_id',f.emp);
+    if(f.tipo) q=q.eq('tipo',f.tipo);
+    const {data,error}=await q; if(error) throw error;
+    const m=s=>{ const [h,mi]=(s||'0:0').split(':').map(Number); return h*60+mi; };
+    const a=m(f.hd||'00:00'), b=m(f.hh||'23:59');
+    S.rows=(data||[]).filter(r=>{ const d=new Date(r.ts); const t=d.getHours()*60+d.getMinutes(); return t>=a&&t<=b; });
+    if($('res')) $('res').innerHTML=resHtml();
+  },
+  expCsv(){
+    const safe=s=>/^[=+\-@]/.test(s)?"'"+s:s; const num=n=>String(n).replace('.',',');
+    const rows=[['Fecha','Hora','Empleado','Tipo','Latitud','Longitud','Precisión (m)','Dispositivo'],
+      ...S.rows.map(r=>[fDate(r.ts),fTime(r.ts),safe(r.nombre),TIPOS[r.tipo].l,num(r.latitud),num(r.longitud),r.precision_gps!=null?Math.round(r.precision_gps):'',safe(r.dispositivo||'')])];
+    const csv='﻿'+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+    download('fichajes_'+isoDay(new Date())+'.csv',csv,'text/csv;charset=utf-8');
+  },
+  async expPdf(){
+    toast('Generando PDF…');
+    if(!window.jspdf) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    if(!(window.jspdf&&window.jspdf.jsPDF.API.autoTable)) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+    const doc=new window.jspdf.jsPDF({orientation:'landscape'});
+    const emp=(S.empresas.find(e=>e.id===S.empresaId)||{}).nombre||'';
+    doc.setFontSize(16); doc.text('FichajeGPS · Informe de fichajes',14,15);
+    doc.setFontSize(10); doc.text(`${emp} · ${S.flt&&S.flt.desde||''} a ${S.flt&&S.flt.hasta||''} · ${S.rows.length} registros`,14,22);
+    doc.autoTable({startY:27,styles:{fontSize:8},headStyles:{fillColor:[29,78,216]},
+      head:[['Fecha','Hora','Empleado','Tipo','Latitud','Longitud','Precisión','Dispositivo']],
+      body:S.rows.map(r=>[fDate(r.ts),fTime(r.ts),r.nombre,TIPOS[r.tipo].l,(+r.latitud).toFixed(6),(+r.longitud).toFixed(6),r.precision_gps!=null?'±'+Math.round(r.precision_gps)+' m':'',r.dispositivo||''])});
+    doc.save('fichajes_'+isoDay(new Date())+'.pdf');
+  },
+  async editEmp(el){
+    const u=S.emps.find(x=>x.id===el.dataset.id); const v=await dialogForm('Editar empleado',[{name:'nombre',label:'Nombre',value:u.nombre}]); if(!v) return;
+    const {error}=await sb.from('usuarios').update({nombre:v.nombre.trim()}).eq('id',u.id); if(error) throw error;
+    await loadEmps(); drawTab(); toast('Guardado','ok');
+  },
+  async toggleEmp(el){
+    const u=S.emps.find(x=>x.id===el.dataset.id);
+    const {error}=await sb.from('usuarios').update({activo:!u.activo}).eq('id',u.id); if(error) throw error;
+    await loadEmps(); drawTab();
+  },
+  async delEmp(el){
+    const u=S.emps.find(x=>x.id===el.dataset.id);
+    if(!await confirmDlg(`¿Eliminar a ${u.nombre} y todos sus fichajes? No se puede deshacer.`)) return;
+    const {error}=await sb.from('usuarios').delete().eq('id',u.id); if(error) throw error;
+    await Promise.all([loadEmps(),loadLive()]); drawTab(); toast('Empleado eliminado','ok');
+  },
+  async newInvite(el){
+    const rol=el.dataset.rol; if(rol==='empleado'&&!S.empresaId) throw new Error('Crea primero una empresa.');
+    const v=await dialogForm(rol==='admin'?'Enlace de administrador':'Enlace de empleado',[
+      {name:'dias',label:'Caduca en',type:'select',value:'7',options:[[1,'1 día'],[3,'3 días'],[7,'7 días'],[30,'30 días']]},
+      {name:'usos',label:'Usos máximos',type:'number',value:'1',min:'1'}],'Generar enlace');
+    if(!v) return;
+    const token=randToken();
+    const {error}=await sb.from('invitaciones').insert({token,rol,empresa_id:rol==='empleado'?S.empresaId:null,creada_por:S.session.user.id,
+      expira_en:new Date(Date.now()+(+v.dias)*864e5).toISOString(),max_usos:Math.max(1,parseInt(v.usos)||1)});
+    if(error) throw error;
+    await loadInvites(); if(S.tab==='inv') drawTab();
+    const url=inviteUrl(rol,token);
+    modal(`<h3>Enlace generado</h3><p class="mut small" style="margin-bottom:10px">Válido para ${rol==='admin'?'un administrador':'un empleado'}. Envíalo por WhatsApp, email…</p>
+      <input id="lk" readonly value="${esc(url)}" onclick="this.select()">
+      <div class="row end"><button class="btn ghost" data-act="closeModal">Cerrar</button>${navigator.share?`<button class="btn ghost" data-act="shareLink" data-val="${esc(url)}">Compartir</button>`:''}<button class="btn" data-act="copy" data-val="${esc(url)}">Copiar</button></div>`);
+  },
+  async copy(el){ await copyText(el.dataset.val); toast('Enlace copiado','ok'); },
+  async shareLink(el){ try{ await navigator.share({title:'FichajeGPS',text:'Tu invitación a FichajeGPS',url:el.dataset.val}); }catch(e){} },
+  async delInv(el){
+    if(!await confirmDlg('¿Revocar este enlace? Dejará de funcionar.','Revocar')) return;
+    const {error}=await sb.from('invitaciones').delete().eq('id',el.dataset.id); if(error) throw error;
+    await loadInvites(); drawTab();
+  },
+  async newEmpresa(){
+    const v=await dialogForm('Nueva empresa',[{name:'nombre',label:'Nombre de la empresa'}],'Crear'); if(!v) return;
+    const {data,error}=await sb.from('empresas').insert({nombre:v.nombre.trim(),creada_por:S.session.user.id}).select().single(); if(error) throw error;
+    S.empresaId=data.id; LS.set('fgps_emp',data.id); S.tab='empresas'; toast('Empresa creada','ok'); renderAdmin();
+  },
+  async renEmpresa(el){
+    const e=S.empresas.find(x=>x.id===el.dataset.id); const v=await dialogForm('Renombrar empresa',[{name:'nombre',label:'Nombre',value:e.nombre}]); if(!v) return;
+    const {error}=await sb.from('empresas').update({nombre:v.nombre.trim()}).eq('id',e.id); if(error) throw error;
+    S.tab='empresas'; renderAdmin();
+  },
+  async useEmpresa(el){ S.empresaId=el.dataset.id; LS.set('fgps_emp',el.dataset.id); S.rows=[]; S._searched=false; S.flt=null; S.tab='live'; renderAdmin(); },
+  async delEmpresa(el){
+    const e=S.empresas.find(x=>x.id===el.dataset.id);
+    if(!await confirmDlg(`¿Eliminar la empresa «${e.nombre}» con todos sus empleados y fichajes? No se puede deshacer.`)) return;
+    const {error}=await sb.from('empresas').delete().eq('id',e.id); if(error) throw error;
+    if(S.empresaId===e.id) S.empresaId=null;
+    S.tab='empresas'; S.rows=[]; S._searched=false; toast('Empresa eliminada','ok'); renderAdmin();
+  }
+};
+
+/* ---------- 9. EVENTOS GLOBALES ---------- */
+async function safe(fn,el,e){ try{ await fn(el,e); }catch(err){ toast((err&&err.message)||String(err),'err'); console.error(err); } }
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act],[data-go]'); if(!el) return;
+  if(el.dataset.go){ go(el.dataset.go); return; }
+  const fn=A[el.dataset.act]; if(fn) safe(fn,el,e);
+});
+document.addEventListener('submit',e=>{
+  const f=e.target.closest('form[data-submit]'); if(!f) return; e.preventDefault();
+  const fn=A[f.dataset.submit]; if(!fn) return;
+  const btn=f.querySelector('button:not([type=button])'); if(btn) btn.classList.add('busy');
+  safe(fn,f,e).finally(()=>{ if(btn) btn.classList.remove('busy'); });
+});
+document.addEventListener('change',e=>{
+  const el=e.target.closest('[data-change]'); if(!el) return;
+  const fn=A[el.dataset.change]; if(fn) safe(fn,el,e);
+});
+
+/* ---------- 10. ARRANQUE ---------- */
+window.addEventListener('load',()=>{ if(!window.supabase&&cfg().url){ render('<div class="wrap narrow"><div class="card"><h2>Sin conexión</h2><p>No se pudo cargar la librería de Supabase. Comprueba tu conexión a internet.</p></div></div>'); return; } route(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "FichajeGPS",
+  "short_name": "FichajeGPS",
+  "description": "Control horario con geolocalización GPS en tiempo real",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1d4ed8",
+  "theme_color": "#1d4ed8",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
