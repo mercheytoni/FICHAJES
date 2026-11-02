@@ -47,7 +47,16 @@ input:focus,select:focus{outline:2px solid var(--blue-l);border-color:var(--blue
 .credit.light b{background:linear-gradient(90deg,#fde68a,#fff);-webkit-background-clip:text;background-clip:text}
 .top{background:linear-gradient(90deg,var(--blue-d),var(--blue));color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:5}
 .brand{display:flex;align-items:center;gap:8px;font-weight:700}.brand svg{width:32px;height:32px}
-.top select{width:auto;max-width:46vw;margin:0;padding:6px 8px;font-size:.85rem}
+.top{flex-wrap:wrap}
+.top .row{gap:8px;flex-wrap:nowrap;justify-content:flex-end}
+.top select{width:auto;max-width:46vw;margin:0;padding:6px 8px;font-size:.9rem;font-weight:600;color:var(--tx);background:#fff;border:0;border-radius:8px}
+.empsel{margin:0;color:#fff;font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.empsel span{display:block;opacity:.85;margin-bottom:2px}
+.grid2>*{min-width:0}
+input[type=date]{min-width:0;max-width:100%}
+.xrow{display:flex;gap:6px;margin-bottom:8px;align-items:center}
+.xrow input{margin-top:0}
+.xrow button{flex:none}
 .tabs2{display:flex;background:#e2e8f0;border-radius:12px;padding:4px;margin-bottom:14px}
 .tabs2 button{flex:1;padding:9px;border-radius:9px;font-weight:600;font-size:.9rem;color:var(--mut)}
 .tabs2 button.on{background:#fff;color:var(--blue);box-shadow:0 1px 2px rgba(0,0,0,.1)}
@@ -137,6 +146,20 @@ const isoDay = d => new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOStrin
 const fd = form => Object.fromEntries(new FormData(form));
 const mapUrl = (la,lo) => `https://www.google.com/maps?q=${la},${lo}`;
 const fmtDur = ms => { const m=Math.floor(ms/60000); return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'; };
+const fmtHM = ms => { const m=Math.round(ms/60000); return Math.floor(m/60)+':'+String(m%60).padStart(2,'0'); };
+const fDateStr = s => { const p=String(s).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : s; };
+/* Fila de "otros datos" (campo + valor) en la ficha del empleado */
+const xrow = (k,v) => `<div class="xrow"><input name="xk" placeholder="Campo (p. ej. DNI)" value="${esc(k)}"><input name="xv" placeholder="Valor" value="${esc(v)}"><button type="button" class="btn sm danger" data-act="delExtra" aria-label="Quitar campo">✕</button></div>`;
+/* Resumen de los datos del empleado para la tarjeta */
+function empDetails(u){
+  const L=[];
+  if(u.telefono) L.push('📞 '+esc(u.telefono));
+  if(u.direccion) L.push('🏠 '+esc(u.direccion));
+  if(u.fecha_alta) L.push('Alta: '+fDateStr(u.fecha_alta));
+  if(u.fecha_baja) L.push('Baja: '+fDateStr(u.fecha_baja));
+  Object.entries(u.extras||{}).forEach(([k,v])=>L.push(esc(k)+': '+esc(v)));
+  return L.length ? `<div class="small" style="margin-top:6px;line-height:1.6">${L.join('<br>')}</div>` : '';
+}
 const randToken = () => Array.from(crypto.getRandomValues(new Uint8Array(18))).map(b=>b.toString(16).padStart(2,'0')).join('');
 
 function deviceName(){
@@ -455,7 +478,7 @@ async function renderAdmin(){
   await loadEmpresas();
   if(S.empresaId){ await Promise.all([loadEmps(),loadLive(),loadInvites()]); } else { S.emps=[]; S.live=[]; await loadInvites(); S.tab='empresas'; }
   render(`<header class="top"><div class="brand">${LOGO}<span>FichajeGPS</span></div>
-      <div class="row">${S.empresas.length?`<select data-change="setEmpresa">${S.empresas.map(e=>`<option value="${e.id}" ${e.id===S.empresaId?'selected':''}>${esc(e.nombre)}</option>`).join('')}</select>`:''}
+      <div class="row">${S.empresas.length?`<label class="empsel"><span>Empresas</span><select data-change="setEmpresa">${S.empresas.map(e=>`<option value="${e.id}" ${e.id===S.empresaId?'selected':''}>${esc(e.nombre)}</option>`).join('')}</select></label>`:''}
       <button class="btn sm ghostw" data-act="logout">Salir</button></div></header>
     <main class="wrap"><nav class="tabs" id="tabs"></nav><div id="tab"></div>${credit()}</main>`);
   drawTabs(); drawTab();
@@ -504,14 +527,14 @@ function tabFich(){
 function resHtml(){
   if(!S.rows.length) return `<div class="card empty">Sin resultados.</div>`;
   return `<div class="row between" style="margin-bottom:8px"><span class="mut small">${S.rows.length} fichajes${S.rows.length>=1000?' (máx. 1000: acota el rango)':''}</span>
-    <span class="row"><button class="btn sm ghost" data-act="expCsv">⬇ CSV</button><button class="btn sm ghost" data-act="expPdf">⬇ PDF</button></span></div>
+    <span class="row"><button class="btn sm ghost" data-act="expCsv">⬇ CSV</button><button class="btn sm ghost" data-act="expPdf">⬇ PDF</button><button class="btn sm green" data-act="expXlsx">⬇ Excel</button></span></div>
     <div class="tw"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Empleado</th><th>Tipo</th><th>Ubicación</th><th>Precisión</th><th>Dispositivo</th></tr></thead><tbody>
     ${S.rows.map(r=>`<tr><td>${fDate(r.ts)}</td><td>${fTime(r.ts)}</td><td>${esc(r.nombre)}</td><td><span class="badge b-${r.tipo}">${TIPOS[r.tipo].l}</span></td><td><a target="_blank" rel="noopener" href="${mapUrl(r.latitud,r.longitud)}">${(+r.latitud).toFixed(5)}, ${(+r.longitud).toFixed(5)}</a></td><td>${r.precision_gps!=null?'±'+Math.round(r.precision_gps)+' m':'—'}</td><td>${esc(r.dispositivo||'')}</td></tr>`).join('')}
     </tbody></table></div>`;
 }
 function tabEmps(){
-  return `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Empleados</h2><button class="btn sm" data-act="newInvite" data-rol="empleado">+ Invitar empleado</button></div>
-    ${S.emps.length?S.emps.map(u=>`<div class="card"><div class="row between"><div><b>${esc(u.nombre)}</b> ${u.activo?'':'<span class="badge">Inactivo</span>'}<div class="mut small">${esc(u.email)}</div></div>
+  return `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Empleados</h2><span class="row"><button class="btn sm green" data-act="expXlsx">⬇ Excel</button><button class="btn sm" data-act="newInvite" data-rol="empleado">+ Invitar empleado</button></span></div>
+    ${S.emps.length?S.emps.map(u=>`<div class="card"><div class="row between"><div><b>${esc(u.nombre)}</b> ${u.activo?'':'<span class="badge">Inactivo</span>'} ${u.fecha_baja&&u.fecha_baja<=isoDay(new Date())?'<span class="badge b-salida">De baja</span>':''}<div class="mut small">${esc(u.email)}</div>${empDetails(u)}</div>
       <div class="row"><button class="btn sm ghost" data-act="editEmp" data-id="${u.id}">Editar</button><button class="btn sm ghost" data-act="toggleEmp" data-id="${u.id}">${u.activo?'Desactivar':'Activar'}</button><button class="btn sm danger" data-act="delEmp" data-id="${u.id}">Eliminar</button></div></div></div>`).join('')
       :'<div class="card empty">Todavía no hay empleados. Genera un enlace de invitación.</div>'}`;
 }
@@ -619,10 +642,92 @@ const A = {
       body:S.rows.map(r=>[fDate(r.ts),fTime(r.ts),r.nombre,TIPOS[r.tipo].l,(+r.latitud).toFixed(6),(+r.longitud).toFixed(6),r.precision_gps!=null?'±'+Math.round(r.precision_gps)+' m':'',r.dispositivo||''])});
     doc.save('fichajes_'+isoDay(new Date())+'.pdf');
   },
-  async editEmp(el){
-    const u=S.emps.find(x=>x.id===el.dataset.id); const v=await dialogForm('Editar empleado',[{name:'nombre',label:'Nombre',value:u.nombre}]); if(!v) return;
-    const {error}=await sb.from('usuarios').update({nombre:v.nombre.trim()}).eq('id',u.id); if(error) throw error;
-    await loadEmps(); drawTab(); toast('Guardado','ok');
+  /* Ficha del empleado: datos personales + campos libres */
+  editEmp(el){
+    const u=S.emps.find(x=>x.id===el.dataset.id); if(!u) return;
+    modal(`<h3>Datos del empleado</h3><p class="mut small" style="margin-bottom:10px">${esc(u.email)}</p>
+      <form data-submit="saveEmp" data-id="${u.id}">
+        <label>Nombre<input name="nombre" required value="${esc(u.nombre)}"></label>
+        <label>Teléfono<input name="telefono" type="tel" value="${esc(u.telefono||'')}"></label>
+        <label>Dirección<input name="direccion" value="${esc(u.direccion||'')}"></label>
+        <div class="grid2">
+          <label>Alta en la empresa<input name="fecha_alta" type="date" value="${esc(u.fecha_alta||'')}"></label>
+          <label>Baja en la empresa<input name="fecha_baja" type="date" value="${esc(u.fecha_baja||'')}"></label>
+        </div>
+        <h3 style="margin-top:4px">Otros datos</h3>
+        <div id="xrows">${Object.entries(u.extras||{}).map(([k,v])=>xrow(k,v)).join('')}</div>
+        <button type="button" class="btn sm ghost" data-act="addExtra">+ Añadir campo</button>
+        <div class="row end"><button type="button" class="btn ghost" data-act="closeModal">Cancelar</button><button class="btn">Guardar</button></div>
+      </form>`);
+  },
+  addExtra(){
+    const d=document.createElement('div'); d.innerHTML=xrow('','');
+    $('xrows').appendChild(d.firstElementChild);
+    const i=$('xrows').querySelector('.xrow:last-child input'); if(i) i.focus();
+  },
+  delExtra(el){ const r=el.closest('.xrow'); if(r) r.remove(); },
+  async saveEmp(f){
+    const g=n=>f.elements[n].value.trim();
+    const alta=g('fecha_alta'), baja=g('fecha_baja');
+    if(alta&&baja&&baja<alta) throw new Error('La fecha de baja no puede ser anterior a la de alta.');
+    const extras={};
+    f.querySelectorAll('.xrow').forEach(r=>{ const k=r.querySelector('[name=xk]').value.trim(), v=r.querySelector('[name=xv]').value.trim(); if(k) extras[k]=v; });
+    const {error}=await sb.from('usuarios').update({nombre:g('nombre'),telefono:g('telefono')||null,direccion:g('direccion')||null,fecha_alta:alta||null,fecha_baja:baja||null,extras}).eq('id',f.dataset.id);
+    if(error){
+      if(/column|schema cache/i.test(error.message)) throw new Error('Falta ejecutar actualizacion_v2.sql en Supabase (SQL Editor).');
+      throw error;
+    }
+    closeModal(); await loadEmps(); drawTab(); toast('Datos guardados','ok');
+  },
+  /* Excel completo: solo administrador */
+  async expXlsx(){
+    if(!S.perfil||S.perfil.rol!=='admin') throw new Error('Solo el administrador puede exportar a Excel.');
+    if(!S.empresaId) throw new Error('Primero crea una empresa.');
+    toast('Preparando el libro de Excel…');
+    if(!window.XLSX) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    await loadEmps();
+    let all=[], from=0; const size=1000;
+    for(;;){
+      const {data,error}=await sb.from('fichajes').select('*').eq('empresa_id',S.empresaId).order('ts',{ascending:true}).order('id').range(from,from+size-1);
+      if(error) throw error;
+      all=all.concat(data||[]);
+      if(!data||data.length<size||all.length>=50000) break;
+      from+=size;
+    }
+    const emp=(S.empresas.find(e=>e.id===S.empresaId)||{}).nombre||'Empresa';
+    /* Hoja Empleados (con los campos libres como columnas) */
+    const keys=[]; S.emps.forEach(u=>Object.keys(u.extras||{}).forEach(k=>{ if(!keys.includes(k)) keys.push(k); }));
+    const sE=[['Nombre','Email','Teléfono','Dirección','Alta en la empresa','Baja en la empresa','Estado',...keys],
+      ...S.emps.map(u=>[u.nombre,u.email,u.telefono||'',u.direccion||'',u.fecha_alta?fDateStr(u.fecha_alta):'',u.fecha_baja?fDateStr(u.fecha_baja):'',u.activo?'Activo':'Inactivo',...keys.map(k=>(u.extras||{})[k]||'')])];
+    /* Hoja Fichajes (todos) */
+    const sF=[['Fecha','Hora','Empleado','Tipo','Latitud','Longitud','Precisión (m)','Dispositivo'],
+      ...all.map(r=>[fDate(r.ts),fTime(r.ts),r.nombre,TIPOS[r.tipo].l,+r.latitud,+r.longitud,r.precision_gps!=null?Math.round(r.precision_gps):'',r.dispositivo||''])];
+    /* Horas por día: suma de los tramos cerrados (entrada/reanudar → pausa/salida) */
+    const nameOf=new Map(S.emps.map(u=>[u.id,u.nombre])); all.forEach(r=>{ if(!nameOf.has(r.usuario_id)) nameOf.set(r.usuario_id,r.nombre); });
+    const start=new Map(), days=new Map();
+    for(const r of all){
+      const t=new Date(r.ts).getTime();
+      if(r.tipo==='entrada'||r.tipo==='reanudar'){ if(!start.has(r.usuario_id)) start.set(r.usuario_id,t); }
+      else if(start.has(r.usuario_id)){
+        const s=start.get(r.usuario_id); start.delete(r.usuario_id);
+        const key=r.usuario_id+'|'+isoDay(new Date(s));
+        days.set(key,(days.get(key)||0)+(t-s));
+      }
+    }
+    const rows=[...days.entries()].map(([k,ms])=>{ const p=k.split('|'); return {n:nameOf.get(p[0])||'',d:p[1],ms}; })
+      .sort((a,b)=>a.n.localeCompare(b.n,'es')||a.d.localeCompare(b.d));
+    const sH=[['Empleado','Fecha','Horas trabajadas','Tiempo (h:mm)'],...rows.map(r=>[r.n,fDateStr(r.d),Math.round(r.ms/36e5*100)/100,fmtHM(r.ms)])];
+    const tot=new Map(); rows.forEach(r=>{ const t=tot.get(r.n)||{d:0,ms:0}; t.d++; t.ms+=r.ms; tot.set(r.n,t); });
+    const sR=[['Empleado','Días con fichaje','Horas totales','Tiempo (h:mm)'],...[...tot.entries()].map(([n,t])=>[n,t.d,Math.round(t.ms/36e5*100)/100,fmtHM(t.ms)])];
+    const wb=XLSX.utils.book_new();
+    const add=(name,aoa,widths)=>{ const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=widths.map(w=>({wch:w})); XLSX.utils.book_append_sheet(wb,ws,name); };
+    add('Resumen',sR,[26,18,16,16]);
+    add('Empleados',sE,[26,30,16,34,18,18,10,...keys.map(()=>20)]);
+    add('Fichajes',sF,[12,10,26,10,12,12,14,22]);
+    add('Horas por día',sH,[26,12,18,16]);
+    const out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+    download('FichajeGPS_'+emp.replace(/[^\w\-]+/g,'_')+'_'+isoDay(new Date())+'.xlsx',out,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    toast('Excel generado: '+all.length+' fichajes','ok');
   },
   async toggleEmp(el){
     const u=S.emps.find(x=>x.id===el.dataset.id);
