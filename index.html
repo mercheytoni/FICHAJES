@@ -978,7 +978,7 @@ function resHtml(){
 function tabEmps(){
   return `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Empleados</h2><span class="row"><button class="btn sm green" data-act="expXlsx">⬇ Excel</button><button class="btn sm" data-act="newInvite" data-rol="empleado">+ Invitar empleado</button></span></div>
     ${S.emps.length?S.emps.map(u=>`<div class="card"><div class="row between"><div><b>${esc(u.nombre)}</b> ${u.activo?'':'<span class="badge">Inactivo</span>'} ${u.fecha_baja&&u.fecha_baja<=isoDay(new Date())?'<span class="badge b-salida">De baja</span>':''}<div class="mut small">${esc(u.email)}</div>${empDetails(u)}</div>
-      <div class="row"><button class="btn sm ghost" data-act="editEmp" data-id="${u.id}">Editar</button><button class="btn sm ghost" data-act="tempPass" data-id="${u.id}">Contraseña temporal</button><button class="btn sm ghost" data-act="resetEmp" data-id="${u.id}">Enviar enlace por correo</button><button class="btn sm ghost" data-act="toggleEmp" data-id="${u.id}">${u.activo?'Desactivar':'Activar'}</button><button class="btn sm danger" data-act="delEmp" data-id="${u.id}">Eliminar</button></div></div></div>`).join('')
+      <div class="row"><button class="btn sm ghost" data-act="editEmp" data-id="${u.id}">Editar</button><button class="btn sm ghost" data-act="tempPass" data-id="${u.id}">Contraseña temporal</button><button class="btn sm ghost" data-act="toggleEmp" data-id="${u.id}">${u.activo?'Desactivar':'Activar'}</button><button class="btn sm danger" data-act="delEmp" data-id="${u.id}">Eliminar</button></div></div></div>`).join('')
       :'<div class="card empty">Todavía no hay empleados. Genera un enlace de invitación.</div>'}`;
 }
 function tabInv(){
