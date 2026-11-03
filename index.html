@@ -712,7 +712,7 @@ function renderLogin(){
         <label>Email<input type="email" name="email" required autocomplete="username"></label>
         <label>Contraseña<input type="password" name="password" required autocomplete="current-password"></label>
         <button class="btn" style="width:100%">Entrar</button>
-        <div style="text-align:center;margin-top:6px"><button type="button" class="link" data-act="forgot">¿Has olvidado tu contraseña?</button></div></form>`
+        <p class="mut small" style="text-align:center;margin-top:10px">${adm?'Si olvidaste tu contraseña, ponte en contacto con quien gestiona la aplicación.':'Si olvidaste tu contraseña, ponte en contacto con el administrador.'}</p></form>`
       :`<form data-submit="doRegisterCompany">
         <label>Tu nombre<input name="nombre" required></label>
         <label>Nombre de la empresa<input name="empresa" required></label>
@@ -1018,7 +1018,7 @@ const A = {
     if(data.session){ await applyPending(pend); toast('Empresa creada','ok'); go('/app'); }
     else { LS.set('fgps_pending',JSON.stringify(pend)); showInfo('Revisa tu correo','Te hemos enviado un enlace para confirmar tu email. Después de confirmarlo, inicia sesión y tu empresa se creará automáticamente.'); }
   },
-  forgot(){ renderForgot(); },
+  forgot(){ toast('Si olvidaste tu contraseña, ponte en contacto con el administrador.'); },
   async doForgot(f){
     const email=fd(f).email.trim();
     const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:appBase()});
