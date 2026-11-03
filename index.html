@@ -128,6 +128,10 @@ const CONFIG = {
 const LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#1d4ed8"/><path d="M256 66C174 66 108 130 108 212c0 106 148 236 148 236s148-130 148-236C404 130 338 66 256 66z" fill="#fff"/><circle cx="256" cy="212" r="88" fill="#1d4ed8"/><circle cx="256" cy="212" r="70" fill="none" stroke="#fff" stroke-width="10"/><path d="M256 160v52l36 22" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><circle cx="378" cy="378" r="76" fill="#16a34a" stroke="#1d4ed8" stroke-width="14"/><path d="M342 380l28 28 50-58" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 (function(){ const l=document.createElement('link'); l.rel='icon'; l.href='data:image/svg+xml,'+encodeURIComponent(LOGO); document.head.appendChild(l); })();
 
+/* Estado de arranque: Supabase devuelve al usuario con los datos del enlace de correo
+   en el fragmento de la URL (#access_token=…&type=recovery, o #error=…). Se guarda antes de que se limpie. */
+const BOOT = { recovery: /[#&]type=recovery/.test(location.hash||''), authErr: /[#&]error(_code)?=/.test(location.hash||'') };
+
 /* ---------- 2. UTILIDADES ---------- */
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -207,8 +211,12 @@ function authMsg(e){
   if(/Invalid login/i.test(m)) return 'Email o contraseña incorrectos.';
   if(/not confirmed/i.test(m)) return 'Confirma tu email antes de entrar (revisa tu correo).';
   if(/already registered/i.test(m)) return 'Ese email ya está registrado. Usa «Ya tengo cuenta».';
+  if(/different from the old/i.test(m)) return 'La contraseña nueva debe ser distinta de la temporal.';
   if(/Password should be/i.test(m)) return 'La contraseña debe tener al menos 6 caracteres.';
-  if(/rate limit/i.test(m)) return 'Demasiados intentos. Espera unos minutos.';
+  if(/rate limit|only request this after|security purposes/i.test(m)) return 'Has pedido demasiados enlaces o intentos. Espera unos minutos e inténtalo de nuevo.';
+  if(/not authorized/i.test(m)) return 'El servicio de correo no puede enviar a esa dirección. El administrador debe configurar un servidor SMTP propio en Supabase (ver README).';
+  if(/different from the old/i.test(m)) return 'La contraseña nueva debe ser distinta de la anterior.';
+  if(/session.*missing|not authenticated|jwt/i.test(m)) return 'El enlace ha caducado. Solicita uno nuevo desde «¿Has olvidado tu contraseña?».';
   return m;
 }
 
@@ -600,7 +608,7 @@ function buildHorasXlsx(company, emps, all) {
 
 /* ---------- 3. ESTADO Y SUPABASE ---------- */
 const S = { session:null, perfil:null, empresas:[], empresaId:null, empNombre:'', emps:[], live:[], rows:[], invites:[], mine:[],
-            tab:'live', rt:'', timers:[], channel:null, fresh:null, invMode:'new', inv:null, loginRole:'employee', loginTab:'login', flt:null };
+            tab:'live', rt:'', timers:[], channel:null, fresh:null, invMode:'new', inv:null, loginRole:'employee', loginTab:'login', flt:null, recovery:false, authErrShown:false };
 let sb = null;
 
 function cfg(){ return { url: CONFIG.SUPABASE_URL||LS.get('fgps_url')||'', key: CONFIG.SUPABASE_ANON_KEY||LS.get('fgps_key')||'', app: CONFIG.APP_URL||LS.get('fgps_app')||'' }; }
@@ -616,6 +624,8 @@ function inviteUrl(rol,token){
   if(!base){ toast('Configura la URL pública de la app (⚙️ en la pantalla inicial) para que los enlaces funcionen','err'); base=location.href.split('#')[0]; }
   return base+'#/invite/'+(rol==='admin'?'admin':'employee')+'/'+token;
 }
+/* Dirección a la que vuelve el usuario tras pulsar el enlace del correo */
+const appBase = () => { const c=cfg(); return c.app || location.href.split('#')[0]; };
 function clearTimers(){ S.timers.forEach(clearInterval); S.timers=[]; }
 function unsubscribeRT(){ if(S.channel&&sb){ sb.removeChannel(S.channel); } S.channel=null; S.rt=''; }
 
@@ -649,6 +659,8 @@ async function route(){
   const parts=(location.hash.replace(/^#/,'')||'/').split('/').filter(Boolean);
   if(parts[0]==='setup') return renderSetup();
   if(!initSB()) return renderSetup();
+  if(BOOT.recovery||S.recovery){ S.recovery=true; return renderRecovery(); }
+  if(BOOT.authErr&&!S.authErrShown){ S.authErrShown=true; return showInfo('Enlace no válido','El enlace ha caducado o ya se usó. Solicita uno nuevo desde «¿Has olvidado tu contraseña?».'); }
   render(spinner());
   try{ await loadSession(); }catch(e){ toast(e.message,'err'); }
   if(parts[0]==='invite'&&parts[2]) return renderInvite(parts[2]);
@@ -656,6 +668,7 @@ async function route(){
   if(parts[0]==='app'){
     if(!S.session) return go('/');
     if(!S.perfil) return renderNoProfile();
+    if(S.perfil.debe_cambiar_password) return renderMustChange();
     return S.perfil.rol==='admin' ? renderAdmin() : renderEmployee();
   }
   if(S.session&&S.perfil) return go('/app');
@@ -698,7 +711,8 @@ function renderLogin(){
     ${tab==='login'?`<form data-submit="doLogin">
         <label>Email<input type="email" name="email" required autocomplete="username"></label>
         <label>Contraseña<input type="password" name="password" required autocomplete="current-password"></label>
-        <button class="btn" style="width:100%">Entrar</button></form>`
+        <button class="btn" style="width:100%">Entrar</button>
+        <div style="text-align:center;margin-top:6px"><button type="button" class="link" data-act="forgot">¿Has olvidado tu contraseña?</button></div></form>`
       :`<form data-submit="doRegisterCompany">
         <label>Tu nombre<input name="nombre" required></label>
         <label>Nombre de la empresa<input name="empresa" required></label>
@@ -707,6 +721,49 @@ function renderLogin(){
         <button class="btn" style="width:100%">Crear empresa y cuenta</button></form>`}
     ${!adm?'<p class="mut small" style="margin-top:12px">¿Tu empresa te envió un enlace de invitación? Ábrelo para crear tu cuenta.</p>':''}
     </div>${credit()}</div>`);
+}
+/* ---- Recuperar contraseña: se pide el email y se envía un enlace de verificación ---- */
+function renderForgot(){
+  render(`<div class="wrap narrow"><button class="link" data-go="/login/${S.loginRole==='admin'?'admin':'employee'}">← Volver</button>
+    <div class="card"><div class="logo-sm">${LOGO}</div><h2>Recuperar contraseña</h2>
+    <p class="mut small" style="margin-bottom:12px">Escribe el email de tu cuenta. Te enviaremos un enlace para crear una contraseña nueva. Solo quien tenga acceso a ese correo puede cambiarla.</p>
+    <form data-submit="doForgot"><label>Email<input type="email" name="email" required autocomplete="username"></label>
+    <button class="btn" style="width:100%">Enviar enlace</button></form>
+    <div id="fmsg"></div></div>${credit()}</div>`);
+}
+/* ---- Pantalla a la que llega el usuario desde el enlace del correo ---- */
+async function renderRecovery(){
+  render(spinner());
+  let ses=null;
+  try{ const r=await sb.auth.getSession(); ses=r.data&&r.data.session; }catch(e){}
+  if(!ses){
+    S.recovery=false; BOOT.recovery=false;
+    return showInfo('Enlace no válido','El enlace ha caducado o ya se usó. Solicita uno nuevo desde «¿Has olvidado tu contraseña?».');
+  }
+  render(`<div class="wrap narrow"><div class="card"><div class="logo-sm">${LOGO}</div><h2>Crea una contraseña nueva</h2>
+    <p class="mut small" style="margin-bottom:12px">Cuenta: <b>${esc(ses.user.email||'')}</b></p>
+    <form data-submit="doNewPassword">
+      <label>Contraseña nueva (mín. 6)<input type="password" name="p1" minlength="6" required autocomplete="new-password"></label>
+      <label>Repite la contraseña<input type="password" name="p2" minlength="6" required autocomplete="new-password"></label>
+      <button class="btn" style="width:100%">Guardar contraseña</button></form></div>${credit()}</div>`);
+}
+/* ---- Contraseña temporal: la persona debe elegir una propia antes de continuar ---- */
+function renderMustChange(){
+  render(`<div class="wrap narrow"><div class="card"><div class="logo-sm">${LOGO}</div><h2>Elige tu contraseña</h2>
+    <p class="mut small" style="margin-bottom:12px">Has entrado con una contraseña temporal. Para continuar, crea una contraseña propia que solo conozcas tú.</p>
+    <form data-submit="doMustChange">
+      <label>Contraseña nueva (mín. 8)<input type="password" name="p1" minlength="8" required autocomplete="new-password"></label>
+      <label>Repite la contraseña<input type="password" name="p2" minlength="8" required autocomplete="new-password"></label>
+      <button class="btn" style="width:100%">Guardar y continuar</button></form>
+    <div class="row end" style="margin-top:10px"><button class="btn ghost sm" data-act="logout">Cerrar sesión</button></div></div>${credit()}</div>`);
+}
+function genTempPass(){
+  const L='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz', N='23456789', ALL=L+N;
+  const r=n=>{ const a=new Uint32Array(n); crypto.getRandomValues(a); return a; };
+  const pick=(set,x)=>set[x%set.length];
+  const a=r(10); let out=[...a].map(x=>pick(ALL,x));
+  out[0]=pick(L,a[0]); out[4]=pick(N,a[4]); out[9]=pick(N,a[9]);   // siempre hay letras y números
+  return out.join('');
 }
 function showInfo(title,msg){
   render(`<div class="wrap narrow"><div class="card"><div class="logo-sm">${LOGO}</div><h2>${esc(title)}</h2><p>${esc(msg)}</p>
@@ -921,7 +978,7 @@ function resHtml(){
 function tabEmps(){
   return `<div class="row between" style="margin-bottom:10px"><h2 style="margin:0">Empleados</h2><span class="row"><button class="btn sm green" data-act="expXlsx">⬇ Excel</button><button class="btn sm" data-act="newInvite" data-rol="empleado">+ Invitar empleado</button></span></div>
     ${S.emps.length?S.emps.map(u=>`<div class="card"><div class="row between"><div><b>${esc(u.nombre)}</b> ${u.activo?'':'<span class="badge">Inactivo</span>'} ${u.fecha_baja&&u.fecha_baja<=isoDay(new Date())?'<span class="badge b-salida">De baja</span>':''}<div class="mut small">${esc(u.email)}</div>${empDetails(u)}</div>
-      <div class="row"><button class="btn sm ghost" data-act="editEmp" data-id="${u.id}">Editar</button><button class="btn sm ghost" data-act="toggleEmp" data-id="${u.id}">${u.activo?'Desactivar':'Activar'}</button><button class="btn sm danger" data-act="delEmp" data-id="${u.id}">Eliminar</button></div></div></div>`).join('')
+      <div class="row"><button class="btn sm ghost" data-act="editEmp" data-id="${u.id}">Editar</button><button class="btn sm ghost" data-act="tempPass" data-id="${u.id}">Contraseña temporal</button><button class="btn sm ghost" data-act="resetEmp" data-id="${u.id}">Enviar enlace por correo</button><button class="btn sm ghost" data-act="toggleEmp" data-id="${u.id}">${u.activo?'Desactivar':'Activar'}</button><button class="btn sm danger" data-act="delEmp" data-id="${u.id}">Eliminar</button></div></div></div>`).join('')
       :'<div class="card empty">Todavía no hay empleados. Genera un enlace de invitación.</div>'}`;
 }
 function tabInv(){
@@ -960,6 +1017,54 @@ const A = {
     const pend={tipo:'registro',nombre:v.nombre.trim(),empresa:v.empresa.trim()};
     if(data.session){ await applyPending(pend); toast('Empresa creada','ok'); go('/app'); }
     else { LS.set('fgps_pending',JSON.stringify(pend)); showInfo('Revisa tu correo','Te hemos enviado un enlace para confirmar tu email. Después de confirmarlo, inicia sesión y tu empresa se creará automáticamente.'); }
+  },
+  forgot(){ renderForgot(); },
+  async doForgot(f){
+    const email=fd(f).email.trim();
+    const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:appBase()});
+    if(error) throw new Error(authMsg(error));
+    $('fmsg').innerHTML='<p class="small" style="margin-top:12px;color:var(--green);font-weight:600">Si el email está registrado, te hemos enviado un enlace. Revisa también la carpeta de spam. Por seguridad, el enlace caduca pasado un tiempo y solo sirve una vez.</p>';
+  },
+  async doMustChange(f){
+    const v=fd(f);
+    if(v.p1!==v.p2) throw new Error('Las contraseñas no coinciden.');
+    if(v.p1.length<8) throw new Error('La contraseña debe tener al menos 8 caracteres.');
+    const {error}=await sb.auth.updateUser({password:v.p1});
+    if(error) throw new Error(authMsg(error));
+    const r=await sb.rpc('password_cambiada'); if(r.error) throw new Error('No se pudo confirmar el cambio: '+r.error.message);
+    toast('Contraseña actualizada','ok'); go('/app');
+  },
+  /* El administrador pone una contraseña temporal a un empleado (sin correo) */
+  async tempPass(el){
+    const u=S.emps.find(x=>x.id===el.dataset.id); if(!u) return;
+    if(!await confirmDlg(`¿Poner una contraseña temporal a ${u.nombre}? La contraseña actual dejará de funcionar y tendrá que elegir una nueva al entrar.`,'Poner contraseña temporal')) return;
+    const pass=genTempPass();
+    const {error}=await sb.rpc('admin_set_password',{p_user:u.id,p_password:pass});
+    if(error){
+      if(/admin_set_password|schema cache|Could not find/i.test(error.message)) throw new Error('Falta ejecutar actualizacion_v3.sql en Supabase (SQL Editor).');
+      throw new Error(error.message);
+    }
+    modal(`<h3>Contraseña temporal</h3>
+      <p>Entrega esta contraseña a <b>${esc(u.nombre)}</b> (${esc(u.email)}). <b>Solo se muestra ahora</b>; si la pierdes, genera otra.</p>
+      <div class="card" style="text-align:center;font-size:1.6rem;letter-spacing:2px;font-family:ui-monospace,Menlo,Consolas,monospace;user-select:all;padding:14px;margin:10px 0">${esc(pass)}</div>
+      <p class="mut small">Al entrar con ella, la app le pedirá que cree una contraseña propia.</p>
+      <div class="row end"><button class="btn ghost" data-act="closeModal">Cerrar</button><button class="btn" data-act="copy" data-val="${esc(pass)}" data-msg="Contraseña copiada">Copiar</button></div>`);
+  },
+  async doNewPassword(f){
+    const v=fd(f);
+    if(v.p1!==v.p2) throw new Error('Las contraseñas no coinciden.');
+    const {error}=await sb.auth.updateUser({password:v.p1});
+    if(error) throw new Error(authMsg(error));
+    S.recovery=false; BOOT.recovery=false;
+    toast('Contraseña actualizada','ok'); go('/app');
+  },
+  /* El administrador envía a un empleado un enlace para crear contraseña nueva */
+  async resetEmp(el){
+    const u=S.emps.find(x=>x.id===el.dataset.id); if(!u) return;
+    if(!await confirmDlg(`¿Enviar a ${u.email} un enlace para crear una contraseña nueva?`,'Enviar enlace')) return;
+    const {error}=await sb.auth.resetPasswordForEmail(u.email,{redirectTo:appBase()});
+    if(error) throw new Error(authMsg(error));
+    toast('Enlace enviado a '+u.email,'ok');
   },
   async doRegisterExisting(f){ const v=fd(f); await applyPending({tipo:'registro',nombre:v.nombre.trim(),empresa:v.empresa.trim()}); toast('Empresa creada','ok'); go('/app'); },
   async doInvite(f){
@@ -1111,7 +1216,7 @@ const A = {
       <input id="lk" readonly value="${esc(url)}" onclick="this.select()">
       <div class="row end"><button class="btn ghost" data-act="closeModal">Cerrar</button>${navigator.share?`<button class="btn ghost" data-act="shareLink" data-val="${esc(url)}">Compartir</button>`:''}<button class="btn" data-act="copy" data-val="${esc(url)}">Copiar</button></div>`);
   },
-  async copy(el){ await copyText(el.dataset.val); toast('Enlace copiado','ok'); },
+  async copy(el){ await copyText(el.dataset.val); toast(el.dataset.msg||'Enlace copiado','ok'); },
   async shareLink(el){ try{ await navigator.share({title:'FichajeGPS',text:'Tu invitación a FichajeGPS',url:el.dataset.val}); }catch(e){} },
   async delInv(el){
     if(!await confirmDlg('¿Revocar este enlace? Dejará de funcionar.','Revocar')) return;
