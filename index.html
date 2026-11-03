@@ -212,6 +212,392 @@ function authMsg(e){
   return m;
 }
 
+/* ---------- 2b. ESCRITOR XLSX MÍNIMO (sin librerías externas) ----------
+   Genera un .xlsx real (zip + XML) con estilos, fórmulas (con su valor en caché),
+   validación de datos, formato condicional y configuración de impresión. */
+const XL = (() => {
+  const enc = new TextEncoder();
+  const CT = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); CT[n] = c >>> 0; }
+  const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CT[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const x = s => String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const xa = s => x(s).replace(/"/g, '&quot;');
+  const colName = n => { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+  const ref = (r, c) => colName(c) + r;
+  const serial = (y, m, d) => Math.round(Date.UTC(y, m - 1, d) / 864e5) + 25569;   // fecha → número de serie de Excel
+  const HDR = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  let noCache = false;   // solo para pruebas: omite los valores en caché de las fórmulas
+
+  /* ---- ZIP sin compresión ---- */
+  const le = (n, b) => { const a = new Uint8Array(b); for (let i = 0; i < b; i++) a[i] = (n >>> (8 * i)) & 255; return a; };
+  const cat = arr => { let L = 0; arr.forEach(a => L += a.length); const o = new Uint8Array(L); let p = 0; arr.forEach(a => { o.set(a, p); p += a.length; }); return o; };
+  function zip(files) {
+    const parts = [], cen = []; let off = 0;
+    for (const f of files) {
+      const nm = enc.encode(f.name), cr = crc32(f.data), sz = f.data.length;
+      const lh = cat([Uint8Array.of(0x50, 0x4b, 3, 4), le(20, 2), le(0x0800, 2), le(0, 2), le(0, 2), le(0x21, 2), le(cr, 4), le(sz, 4), le(sz, 4), le(nm.length, 2), le(0, 2), nm]);
+      cen.push(cat([Uint8Array.of(0x50, 0x4b, 1, 2), le(20, 2), le(20, 2), le(0x0800, 2), le(0, 2), le(0, 2), le(0x21, 2), le(cr, 4), le(sz, 4), le(sz, 4), le(nm.length, 2), le(0, 2), le(0, 2), le(0, 2), le(0, 2), le(0, 4), le(off, 4), nm]));
+      parts.push(lh, f.data); off += lh.length + sz;
+    }
+    const cd = cat(cen);
+    const end = cat([Uint8Array.of(0x50, 0x4b, 5, 6), le(0, 2), le(0, 2), le(files.length, 2), le(files.length, 2), le(cd.length, 4), le(off, 4), le(0, 2)]);
+    return cat([...parts, cd, end]);
+  }
+
+  /* ---- Estilos ---- */
+  function Styles() {
+    const fonts = [], fills = [], borders = [], nfs = [], xfs = [], dxfs = [];
+    const idx = (arr, key) => { let i = arr.indexOf(key); if (i < 0) { i = arr.length; arr.push(key); } return i; };
+    idx(fonts, '<font><sz val="11"/><name val="Calibri"/><family val="2"/></font>');
+    idx(fills, '<fill><patternFill patternType="none"/></fill>');
+    idx(fills, '<fill><patternFill patternType="gray125"/></fill>');
+    idx(borders, '<border><left/><right/><top/><bottom/><diagonal/></border>');
+    idx(xfs, '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>');
+    const light = '<color rgb="FFCBD5E1"/>';
+    const side = (n, st, c) => `<${n} style="${st}">${c}</${n}>`;
+    return {
+      /* o: {b,i,sz,color,fill,bd:'thin'|'total',nf,h,v,wrap} → índice de estilo */
+      get(o) {
+        o = o || {};
+        const font = '<font>' + (o.b ? '<b/>' : '') + (o.i ? '<i/>' : '') + `<sz val="${o.sz || 11}"/><color rgb="FF${o.color || '0F172A'}"/><name val="Calibri"/><family val="2"/></font>`;
+        const fill = o.fill ? `<fill><patternFill patternType="solid"><fgColor rgb="FF${o.fill}"/><bgColor indexed="64"/></patternFill></fill>` : null;
+        let border = null;
+        if (o.bd === 'thin') border = '<border>' + side('left', 'thin', light) + side('right', 'thin', light) + side('top', 'thin', light) + side('bottom', 'thin', light) + '<diagonal/></border>';
+        if (o.bd === 'total') border = '<border>' + side('left', 'thin', light) + side('right', 'thin', light) + side('top', 'medium', '<color rgb="FF0F172A"/>') + side('bottom', 'thin', light) + '<diagonal/></border>';
+        let nf = 0;
+        if (o.nf === '0') nf = 1; else if (o.nf === '0.00') nf = 2; else if (o.nf) nf = 164 + idx(nfs, o.nf);
+        const al = (o.h || o.v || o.wrap) ? `<alignment${o.h ? ` horizontal="${o.h}"` : ''}${o.v ? ` vertical="${o.v}"` : ''}${o.wrap ? ' wrapText="1"' : ''}/>` : '';
+        const xf = `<xf numFmtId="${nf}" fontId="${idx(fonts, font)}" fillId="${fill ? idx(fills, fill) : 0}" borderId="${border ? idx(borders, border) : 0}" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"${al ? ' applyAlignment="1">' + al + '</xf>' : '/>'}`;
+        return idx(xfs, xf);
+      },
+      /* estilo diferencial para formato condicional */
+      dxf(o) {
+        return idx(dxfs, '<dxf><font>' + (o.b ? '<b/>' : '') + `<color rgb="FF${o.color || '000000'}"/></font>` + (o.fill ? `<fill><patternFill><bgColor rgb="FF${o.fill}"/></patternFill></fill>` : '') + '</dxf>');
+      },
+      xml() {
+        let o = HDR + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+        if (nfs.length) o += `<numFmts count="${nfs.length}">` + nfs.map((f, i) => `<numFmt numFmtId="${164 + i}" formatCode="${xa(f)}"/>`).join('') + '</numFmts>';
+        o += `<fonts count="${fonts.length}">${fonts.join('')}</fonts><fills count="${fills.length}">${fills.join('')}</fills><borders count="${borders.length}">${borders.join('')}</borders>`;
+        o += '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>';
+        o += `<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>`;
+        o += `<dxfs count="${dxfs.length}">${dxfs.join('')}</dxfs></styleSheet>`;
+        return o;
+      }
+    };
+  }
+
+  /* ---- Hoja ---- */
+  function cellXml(c) {
+    const a = `<c r="${ref(c.r, c.c)}"${c.s ? ` s="${c.s}"` : ''}`;
+    const v = c.v;
+    if (c.f) {
+      const f = `<f>${x(c.f)}</f>`;
+      if (noCache) return `${a}>${f}</c>`;
+      if (typeof v === 'string') return `${a} t="str">${f}<v>${x(v)}</v></c>`;
+      if (typeof v === 'number' && isFinite(v)) return `${a}>${f}<v>${v}</v></c>`;
+      return `${a}>${f}</c>`;
+    }
+    if (v === null || v === undefined || v === '') return `${a}/>`;
+    if (typeof v === 'number') return isFinite(v) ? `${a}><v>${v}</v></c>` : `${a}/>`;
+    return `${a} t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+  }
+  function Sheet(name) {
+    this.name = name; this.cells = new Map(); this.merges = []; this.colsW = []; this.rowH = new Map();
+    this.cf = []; this.dv = []; this.freeze = 0; this.landscape = true; this.titleRows = null; this.header = ''; this.footer = '';
+  }
+  Sheet.prototype.set = function (r, c, v, s, f) { this.cells.set(r * 100000 + c, { r, c, v, s: s || 0, f: f || null }); return this; };
+  Sheet.prototype.merge = function (r1, c1, r2, c2) { this.merges.push(ref(r1, c1) + ':' + ref(r2, c2)); return this; };
+  Sheet.prototype.xml = function (selected) {
+    const rows = new Map(); let maxR = 1, maxC = 1;
+    for (const c of this.cells.values()) { if (!rows.has(c.r)) rows.set(c.r, []); rows.get(c.r).push(c); if (c.r > maxR) maxR = c.r; if (c.c > maxC) maxC = c.c; }
+    const rn = [...rows.keys()].sort((a, b) => a - b);
+    let o = HDR + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+    o += '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>';
+    o += `<dimension ref="A1:${ref(maxR, maxC)}"/>`;
+    o += `<sheetViews><sheetView ${selected ? 'tabSelected="1" ' : ''}showGridLines="0" workbookViewId="0">` +
+      (this.freeze ? `<pane ySplit="${this.freeze}" topLeftCell="A${this.freeze + 1}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A${this.freeze + 1}" sqref="A${this.freeze + 1}"/>` : '') + '</sheetView></sheetViews>';
+    o += '<sheetFormatPr defaultRowHeight="15"/>';
+    if (this.colsW.length) o += '<cols>' + this.colsW.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('') + '</cols>';
+    o += '<sheetData>';
+    for (const r of rn) {
+      const ht = this.rowH.get(r);
+      o += `<row r="${r}"${ht ? ` ht="${ht}" customHeight="1"` : ''}>`;
+      for (const c of rows.get(r).sort((p, q) => p.c - q.c)) o += cellXml(c);
+      o += '</row>';
+    }
+    o += '</sheetData>';
+    if (this.merges.length) o += `<mergeCells count="${this.merges.length}">` + this.merges.map(m => `<mergeCell ref="${m}"/>`).join('') + '</mergeCells>';
+    let pr = 1;
+    for (const k of this.cf) o += `<conditionalFormatting sqref="${k.sqref}"><cfRule type="cellIs" dxfId="${k.dxf}" priority="${pr++}" operator="${k.op}"><formula>${x(k.f)}</formula></cfRule></conditionalFormatting>`;
+    if (this.dv.length) o += `<dataValidations count="${this.dv.length}">` + this.dv.map(d => `<dataValidation type="${d.type}"${d.op ? ` operator="${d.op}"` : ''} allowBlank="1" showErrorMessage="1" errorTitle="${xa(d.title || 'Valor no válido')}" error="${xa(d.msg || '')}" sqref="${d.sqref}"><formula1>${x(d.f1)}</formula1></dataValidation>`).join('') + '</dataValidations>';
+    o += '<printOptions horizontalCentered="1"/><pageMargins left="0.4" right="0.4" top="0.9" bottom="0.7" header="0.35" footer="0.3"/>';
+    o += `<pageSetup paperSize="9" orientation="${this.landscape ? 'landscape' : 'portrait'}" fitToWidth="1" fitToHeight="0"/>`;
+    if (this.header || this.footer) o += `<headerFooter><oddHeader>${x(this.header)}</oddHeader><oddFooter>${x(this.footer)}</oddFooter></headerFooter>`;
+    return o + '</worksheet>';
+  };
+
+  /* ---- Libro ---- */
+  function build(sheets, styles) {
+    const files = [];
+    const add = (name, str) => files.push({ name, data: enc.encode(str) });
+    const n = sheets.length;
+    add('[Content_Types].xml', HDR + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>');
+    add('_rels/.rels', HDR + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+    const names = sheets.map((s, i) => s.titleRows ? `<definedName name="_xlnm.Print_Titles" localSheetId="${i}">${x("'" + s.name + "'!" + s.titleRows)}</definedName>` : '').join('');
+    add('xl/workbook.xml', HDR + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>' +
+      sheets.map((s, i) => `<sheet name="${xa(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets>' +
+      (names ? `<definedNames>${names}</definedNames>` : '') + '<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>');
+    add('xl/_rels/workbook.xml.rels', HDR + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('') +
+      `<Relationship Id="rId${n + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+    add('xl/styles.xml', styles.xml());
+    sheets.forEach((s, i) => add(`xl/worksheets/sheet${i + 1}.xml`, s.xml(i === 0)));
+    return zip(files);
+  }
+  return { Sheet, Styles, build, serial, ref, colName, setNoCache: v => { noCache = !!v; } };
+})();
+
+
+/* ---------- 2c. LIBRO DE EXCEL: horas ordinarias, extra y festivas ----------
+   Las hojas usan fórmulas ligadas a la hoja «Parámetros»: al cambiar los límites,
+   los sábados/domingos o la lista de festivos, todo se recalcula en Excel. */
+function easterSunday(y) {   // Domingo de Pascua (calendario gregoriano)
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
+    g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4,
+    l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+    mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(y, mo - 1, da));
+}
+function buildHorasXlsx(company, emps, all) {
+  const st = XL.Styles();
+  const HEAD = '1D4ED8', GREY = 'E2E8F0', INPUT = 'FFF2CC';
+  const E = {
+    title: st.get({ b: 1, sz: 16, color: HEAD }), sub: st.get({ b: 1, sz: 12 }),
+    head: st.get({ b: 1, color: 'FFFFFF', fill: HEAD, bd: 'thin', h: 'center', v: 'center', wrap: 1 }),
+    txt: st.get({ bd: 'thin' }), date: st.get({ bd: 'thin', nf: 'dd/mm/yyyy', h: 'center' }), mon: st.get({ bd: 'thin', nf: 'mm/yyyy', h: 'center' }),
+    hrs: st.get({ bd: 'thin', nf: '0.00' }), int: st.get({ bd: 'thin', nf: '0', h: 'center' }), ctr: st.get({ bd: 'thin', h: 'center' }),
+    tTxt: st.get({ b: 1, fill: GREY, bd: 'total' }), tHrs: st.get({ b: 1, fill: GREY, bd: 'total', nf: '0.00' }), tInt: st.get({ b: 1, fill: GREY, bd: 'total', nf: '0', h: 'center' }),
+    inTxt: st.get({ fill: INPUT, bd: 'thin' }), inCtr: st.get({ fill: INPUT, bd: 'thin', h: 'center' }), inDate: st.get({ fill: INPUT, bd: 'thin', nf: 'dd/mm/yyyy', h: 'center' }),
+    lbl: st.get({ b: 1, bd: 'thin' }), note: st.get({ i: 1, color: '475569', wrap: 1, v: 'top' }), small: st.get({ i: 1, color: '64748B' }),
+    lat: st.get({ nf: '0.000000' })
+  };
+  const dxRed = st.dxf({ color: 'DC2626', b: 1 }), dxAmber = st.dxf({ color: 'B45309', b: 1, fill: 'FEF3C7' });
+  const r2 = v => Math.round(v * 100) / 100;
+  const hf = s => String(s).replace(/&/g, '&&');
+  const N = { res: 'Resumen', tts: 'Total por semana', ttm: 'Total por mes', ts: 'Trabajador por semana', tm: 'Trabajador por mes', dd: 'Detalle diario', par: 'Parámetros', emp: 'Empleados', fic: 'Fichajes' };
+  const P = { comp: "'Parámetros'!$B$4", ls: "'Parámetros'!$B$5", lm: "'Parámetros'!$B$6", sat: "'Parámetros'!$B$7", dom: "'Parámetros'!$B$8" };
+  const HOL_A = 12, HOL_B = 71, HOLR = `'Parámetros'!$A$${HOL_A}:$A$${HOL_B}`;
+  const LIM_S = 40, LIM_M = 160;   // valores por defecto (editables en la hoja Parámetros)
+  const DAYN = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  const fromSerial = sr => { const d = new Date((sr - 25569) * 864e5); return String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + d.getUTCFullYear(); };
+
+  /* --- Trabajadores y horas por día (solo tramos cerrados: entrada/reanudar → pausa/salida) --- */
+  const cnt = new Map(); emps.forEach(u => cnt.set(u.nombre, (cnt.get(u.nombre) || 0) + 1));
+  const label = new Map(); emps.forEach(u => label.set(u.id, cnt.get(u.nombre) > 1 ? `${u.nombre} (${u.email})` : u.nombre));
+  all.forEach(r => { if (!label.has(r.usuario_id)) label.set(r.usuario_id, r.nombre); });
+  const start = new Map(), ms = new Map();
+  for (const r of all) {
+    const t = new Date(r.ts).getTime();
+    if (r.tipo === 'entrada' || r.tipo === 'reanudar') { if (!start.has(r.usuario_id)) start.set(r.usuario_id, t); }
+    else if (start.has(r.usuario_id)) {
+      const s = start.get(r.usuario_id); start.delete(r.usuario_id);
+      const k = r.usuario_id + '|' + isoDay(new Date(s)); ms.set(k, (ms.get(k) || 0) + (t - s));
+    }
+  }
+  const dow = (y, m, d) => ((new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7) + 1;   // lunes=1 … domingo=7
+  const D = [...ms.entries()].map(([k, v]) => {
+    const p = k.split('|'), [y, m, d] = p[1].split('-').map(Number), sr = XL.serial(y, m, d), w = dow(y, m, d);
+    return { emp: label.get(p[0]) || '', y, sr, w, wk: sr - (w - 1), mo: XL.serial(y, m, 1), h: r2(v / 36e5) };
+  }).sort((a, b) => a.emp.localeCompare(b.emp, 'es') || a.sr - b.sr);
+
+  /* --- Festivos nacionales precargados (editables en la hoja Parámetros) --- */
+  const yrs = [...new Set(D.map(r => r.y))]; if (!yrs.length) yrs.push(new Date().getFullYear());
+  const hol = [];
+  for (const y of yrs) {
+    const ea = easterSunday(y), add = (m, d, t) => hol.push({ sr: XL.serial(y, m, d), t });
+    add(1, 1, 'Año Nuevo'); add(1, 6, 'Epifanía del Señor');
+    hol.push({ sr: XL.serial(ea.getUTCFullYear(), ea.getUTCMonth() + 1, ea.getUTCDate() - 2), t: 'Viernes Santo' });
+    add(5, 1, 'Fiesta del Trabajo'); add(8, 15, 'Asunción de la Virgen'); add(10, 12, 'Fiesta Nacional de España');
+    add(11, 1, 'Todos los Santos'); add(12, 6, 'Día de la Constitución'); add(12, 8, 'Inmaculada Concepción'); add(12, 25, 'Navidad');
+  }
+  hol.sort((a, b) => a.sr - b.sr); hol.splice(HOL_B - HOL_A + 1);
+  const holSet = new Set(hol.map(h => h.sr));
+
+  /* --- Valores en caché con los parámetros por defecto (Excel los recalcula al abrir) --- */
+  D.forEach(r => { r.fest = holSet.has(r.sr) || r.w >= 6; r.ord = r.fest ? 0 : r.h; r.fes = r.fest ? r.h : 0; });
+  const agg = keyF => {
+    const m = new Map();
+    for (const r of D) { const k = r.emp + '\u0000' + keyF(r); let g = m.get(k); if (!g) { g = { emp: r.emp, k: keyF(r), ord: 0, fes: 0 }; m.set(k, g); } g.ord += r.ord; g.fes += r.fes; }
+    return [...m.values()].sort((a, b) => a.emp.localeCompare(b.emp, 'es') || a.k - b.k);
+  };
+  const PS = agg(r => r.wk), PM = agg(r => r.mo);
+  PS.forEach(g => { g.ext = Math.max(0, g.ord - LIM_S); }); PM.forEach(g => { g.ext = Math.max(0, g.ord - LIM_M); });
+  const weeks = [...new Set(PS.map(g => g.k))].sort((a, b) => a - b), months = [...new Set(PM.map(g => g.k))].sort((a, b) => a - b);
+  const names = [...new Set([...label.values()])].sort((a, b) => a.localeCompare(b, 'es'));
+
+  /* --- Rangos para las fórmulas --- */
+  const ddLast = Math.max(5, 4 + D.length), psLast = Math.max(5, 4 + PS.length), pmLast = Math.max(5, 4 + PM.length);
+  const rg = (sheet, col, last) => `'${sheet}'!$${col}$5:$${col}$${last}`;
+  const dd = c => rg(N.dd, c, ddLast), ps = c => rg(N.ts, c, psLast), pm = c => rg(N.tm, c, pmLast);
+  const sumF = (col, a, b) => b >= a ? `SUM(${col}${a}:${col}${b})` : null;
+  const sum = (arr, f) => r2(arr.reduce((t, x) => t + f(x), 0));
+
+  const sheets = [];
+  const SH = (name, title, widths, heads) => {
+    const s = new XL.Sheet(name); s.colsW = widths; s.freeze = 4; s.titleRows = '$4:$4';
+    s.header = `&L&14&"-,Bold"${hf(company)}&R&10&"-,Regular"${hf(title)}`;
+    s.footer = '&L&9FichajeGPS&C&9Página &P de &N&R&9Impreso el &D';
+    const n = widths.length;
+    s.set(1, 1, company, E.title, P.comp).merge(1, 1, 1, n); s.rowH.set(1, 26);
+    s.set(2, 1, title, E.sub).merge(2, 1, 2, n);
+    heads.forEach((h, i) => s.set(4, i + 1, h, E.head)); s.rowH.set(4, 36);
+    sheets.push(s); return s;
+  };
+  /* ===== 1. Resumen por trabajador ===== */
+  const sR = SH(N.res, 'Resumen de horas por trabajador', [30, 13, 15, 15, 15, 18, 18],
+    ['Trabajador', 'Días trabajados', 'Horas ordinarias', 'Horas festivas', 'Horas totales', 'Horas extra semanales', 'Horas extra mensuales']);
+  const per = D.length ? fromSerial(Math.min(...D.map(r => r.sr))) + ' – ' + fromSerial(Math.max(...D.map(r => r.sr))) : 'sin fichajes';
+  sR.set(3, 1, `Periodo ${per} · Límite semanal ${LIM_S} h · Límite mensual ${LIM_M} h`, E.small,
+    `"Periodo ${per} · Límite semanal "&${P.ls}&" h · Límite mensual "&${P.lm}&" h"`).merge(3, 1, 3, 7);
+  names.forEach((nm, i) => {
+    const r = 5 + i, rows = D.filter(x => x.emp === nm), a = PS.filter(g => g.emp === nm), b = PM.filter(g => g.emp === nm);
+    const ord = sum(rows, x => x.ord), fes = sum(rows, x => x.fes);
+    sR.set(r, 1, nm, E.txt);
+    sR.set(r, 2, rows.filter(x => x.h > 0).length, E.int, `COUNTIFS(${dd('A')},$A${r},${dd('F')},">0")`);
+    sR.set(r, 3, ord, E.hrs, `SUMIFS(${dd('H')},${dd('A')},$A${r})`);
+    sR.set(r, 4, fes, E.hrs, `SUMIFS(${dd('I')},${dd('A')},$A${r})`);
+    sR.set(r, 5, r2(ord + fes), E.hrs, `C${r}+D${r}`);
+    sR.set(r, 6, sum(a, g => g.ext), E.hrs, `SUMIFS(${ps('F')},${ps('A')},$A${r})`);
+    sR.set(r, 7, sum(b, g => g.ext), E.hrs, `SUMIFS(${pm('F')},${pm('A')},$A${r})`);
+  });
+  {
+    const a = 5, b = 4 + names.length, tr = 5 + names.length;
+    sR.set(tr, 1, 'TOTAL', E.tTxt);
+    sR.set(tr, 2, D.filter(x => x.h > 0).length, E.tInt, sumF('B', a, b));
+    sR.set(tr, 3, sum(D, x => x.ord), E.tHrs, sumF('C', a, b)); sR.set(tr, 4, sum(D, x => x.fes), E.tHrs, sumF('D', a, b));
+    sR.set(tr, 5, sum(D, x => x.h), E.tHrs, sumF('E', a, b));
+    sR.set(tr, 6, sum(PS, g => g.ext), E.tHrs, sumF('F', a, b)); sR.set(tr, 7, sum(PM, g => g.ext), E.tHrs, sumF('G', a, b));
+    const notes = [
+      'Horas festivas: las trabajadas en sábado o domingo (si están activados en Parámetros) o en un festivo de la lista. No cuentan para el límite de horas extra.',
+      'Horas extra semanales: horas ordinarias de cada semana (lunes a domingo) por encima del límite semanal. Horas extra mensuales: horas ordinarias de cada mes natural por encima del límite mensual. Se calculan por separado y se solapan: no las sumes sin aplicar el criterio de tu convenio.',
+      'Solo se cuentan los tramos cerrados (entrada o reanudación hasta pausa o salida). Para cambiar los límites, los sábados, domingos o festivos, edita las celdas amarillas de la hoja Parámetros: todo se recalcula.'
+    ];
+    notes.forEach((t, i) => { const r = tr + 2 + i; sR.set(r, 1, t, E.note).merge(r, 1, r, 7); sR.rowH.set(r, i === 1 ? 62 : 34); });
+    if (names.length) sR.cf.push({ sqref: `F5:G${b}`, op: 'greaterThan', f: '0', dxf: dxRed });
+  }
+
+  /* ===== 2-3. Totales de todos los trabajadores por semana / por mes ===== */
+  const tot = (name, title, keyHead, keys, P_, rangeF, rows, lastCol) => {
+    const s = SH(name, title, [18, 14, 15, 15, 15, 20, 17], [keyHead, 'Trabajadores', 'Horas ordinarias', 'Horas festivas', 'Horas totales', 'Horas extra (suma de trabajadores)', 'Ordinarias sin extra']);
+    keys.forEach((k, i) => {
+      const r = 5 + i, g = rows.filter(x => x.k === k), o = sum(g, x => x.ord), f = sum(g, x => x.fes), e = sum(g, x => x.ext);
+      s.set(r, 1, k, lastCol === 'week' ? E.date : E.mon);
+      s.set(r, 2, g.filter(x => x.ord + x.fes > 0).length, E.int, `COUNTIFS(${rangeF('B')},$A${r},${rangeF('E')},">0")`);
+      s.set(r, 3, o, E.hrs, `SUMIFS(${rangeF('C')},${rangeF('B')},$A${r})`);
+      s.set(r, 4, f, E.hrs, `SUMIFS(${rangeF('D')},${rangeF('B')},$A${r})`);
+      s.set(r, 5, r2(o + f), E.hrs, `C${r}+D${r}`);
+      s.set(r, 6, e, E.hrs, `SUMIFS(${rangeF('F')},${rangeF('B')},$A${r})`);
+      s.set(r, 7, r2(o - e), E.hrs, `C${r}-F${r}`);
+    });
+    const a = 5, b = 4 + keys.length, tr = 5 + keys.length;
+    s.set(tr, 1, 'TOTAL', E.tTxt); s.set(tr, 2, null, E.tTxt);
+    s.set(tr, 3, sum(rows, x => x.ord), E.tHrs, sumF('C', a, b)); s.set(tr, 4, sum(rows, x => x.fes), E.tHrs, sumF('D', a, b));
+    s.set(tr, 5, sum(rows, x => x.ord + x.fes), E.tHrs, sumF('E', a, b));
+    s.set(tr, 6, sum(rows, x => x.ext), E.tHrs, sumF('F', a, b)); s.set(tr, 7, sum(rows, x => x.ord - x.ext), E.tHrs, sumF('G', a, b));
+    if (keys.length) s.cf.push({ sqref: `F5:F${b}`, op: 'greaterThan', f: '0', dxf: dxRed });
+    return s;
+  };
+  tot(N.tts, 'Total de todos los trabajadores por semana', 'Semana del (lunes)', weeks, P, ps, PS, 'week');
+  tot(N.ttm, 'Total de todos los trabajadores por mes', 'Mes', months, P, pm, PM, 'month');
+
+  /* ===== 4-5. Por trabajador y semana / por trabajador y mes ===== */
+  const per2 = (name, title, keyHead, limHead, rows, keyCol, limRef, last, isWeek) => {
+    const s = SH(name, title, [30, 18, 15, 15, 15, 20, 17], ['Trabajador', keyHead, 'Horas ordinarias', 'Horas festivas', 'Horas totales', limHead, 'Ordinarias sin extra']);
+    rows.forEach((g, i) => {
+      const r = 5 + i;
+      s.set(r, 1, g.emp, E.txt); s.set(r, 2, g.k, isWeek ? E.date : E.mon);
+      s.set(r, 3, r2(g.ord), E.hrs, `SUMIFS(${dd('H')},${dd('A')},$A${r},${dd(keyCol)},$B${r})`);
+      s.set(r, 4, r2(g.fes), E.hrs, `SUMIFS(${dd('I')},${dd('A')},$A${r},${dd(keyCol)},$B${r})`);
+      s.set(r, 5, r2(g.ord + g.fes), E.hrs, `C${r}+D${r}`);
+      s.set(r, 6, r2(g.ext), E.hrs, `MAX(0,C${r}-${limRef})`);
+      s.set(r, 7, r2(g.ord - g.ext), E.hrs, `C${r}-F${r}`);
+    });
+    const a = 5, b = 4 + rows.length, tr = 5 + rows.length;
+    s.set(tr, 1, 'TOTAL', E.tTxt); s.set(tr, 2, null, E.tTxt);
+    s.set(tr, 3, sum(rows, x => x.ord), E.tHrs, sumF('C', a, b)); s.set(tr, 4, sum(rows, x => x.fes), E.tHrs, sumF('D', a, b));
+    s.set(tr, 5, sum(rows, x => x.ord + x.fes), E.tHrs, sumF('E', a, b));
+    s.set(tr, 6, sum(rows, x => x.ext), E.tHrs, sumF('F', a, b)); s.set(tr, 7, sum(rows, x => x.ord - x.ext), E.tHrs, sumF('G', a, b));
+    if (rows.length) s.cf.push({ sqref: `F5:F${b}`, op: 'greaterThan', f: '0', dxf: dxRed });
+  };
+  per2(N.ts, 'Horas por trabajador y semana', 'Semana del (lunes)', 'Horas extra (sobre límite semanal)', PS, 'D', P.ls, psLast, true);
+  per2(N.tm, 'Horas por trabajador y mes', 'Mes', 'Horas extra (sobre límite mensual)', PM, 'E', P.lm, pmLast, false);
+
+  /* ===== 6. Detalle diario (base de todos los cálculos) ===== */
+  const sD = SH(N.dd, 'Detalle diario de horas trabajadas', [30, 12, 12, 17, 10, 12, 13, 13, 13],
+    ['Trabajador', 'Fecha', 'Día', 'Semana del (lunes)', 'Mes', 'Horas trabajadas', 'Tipo de día', 'Horas ordinarias', 'Horas festivas']);
+  D.forEach((x, i) => {
+    const r = 5 + i;
+    sD.set(r, 1, x.emp, E.txt); sD.set(r, 2, x.sr, E.date); sD.set(r, 3, DAYN[x.w - 1], E.ctr);
+    sD.set(r, 4, x.wk, E.date); sD.set(r, 5, x.mo, E.mon); sD.set(r, 6, x.h, E.hrs);
+    sD.set(r, 7, x.fest ? 'Festivo' : 'Laborable', E.ctr,
+      `IF(OR(COUNTIF(${HOLR},B${r})>0,AND(WEEKDAY(B${r},2)=6,OR(${P.sat}="SÍ",${P.sat}="SI")),AND(WEEKDAY(B${r},2)=7,OR(${P.dom}="SÍ",${P.dom}="SI"))),"Festivo","Laborable")`);
+    sD.set(r, 8, x.ord, E.hrs, `IF(G${r}="Festivo",0,F${r})`);
+    sD.set(r, 9, x.fes, E.hrs, `IF(G${r}="Festivo",F${r},0)`);
+  });
+  if (D.length) { sD.cf.push({ sqref: `G5:G${ddLast}`, op: 'equal', f: '"Festivo"', dxf: dxAmber }); sD.cf.push({ sqref: `I5:I${ddLast}`, op: 'greaterThan', f: '0', dxf: dxAmber }); }
+
+  /* ===== 7. Parámetros (celdas amarillas editables) ===== */
+  const sP = new XL.Sheet(N.par); sP.colsW = [46, 24, 66]; sP.landscape = false;
+  sP.header = `&L&14&"-,Bold"${hf(company)}&R&10&"-,Regular"Parámetros de cálculo`;
+  sP.footer = '&L&9FichajeGPS&C&9Página &P de &N&R&9Impreso el &D';
+  sP.set(1, 1, company, E.title, null).merge(1, 1, 1, 3); sP.rowH.set(1, 26);
+  sP.set(2, 1, 'Parámetros de cálculo', E.sub).merge(2, 1, 2, 3);
+  sP.set(3, 1, 'Cambia solo las celdas amarillas: todas las hojas se recalculan solas. Horas festivas = horas trabajadas en sábado o domingo (si están activados) o en un día de la lista de festivos; no cuentan para el límite de horas extra. Horas extra = horas ordinarias por encima del límite semanal (lunes a domingo) o mensual (mes natural).', E.note).merge(3, 1, 3, 3);
+  sP.rowH.set(3, 64);
+  const prm = [
+    [4, 'Empresa (aparece en las cabeceras)', company, E.inTxt, 'Se usa como título de todas las hojas y en la cabecera de impresión'],
+    [5, 'Límite de horas ordinarias por semana', LIM_S, E.inCtr, 'Lo que supere este número de horas ordinarias en la semana son horas extra'],
+    [6, 'Límite de horas ordinarias por mes', LIM_M, E.inCtr, 'Lo que supere este número de horas ordinarias en el mes son horas extra'],
+    [7, 'El sábado cuenta como día festivo', 'SÍ', E.inCtr, 'Elige SÍ o NO'],
+    [8, 'El domingo cuenta como día festivo', 'SÍ', E.inCtr, 'Elige SÍ o NO']
+  ];
+  prm.forEach(([r, l, v, s, n]) => { sP.set(r, 1, l, E.lbl); sP.set(r, 2, v, s); sP.set(r, 3, n, E.small); });
+  sP.set(10, 1, 'Festivos (una fecha por fila; borra o añade las que necesites)', E.sub).merge(10, 1, 10, 3);
+  sP.set(11, 1, 'Fecha', E.head); sP.set(11, 2, 'Descripción', E.head); sP.set(11, 3, 'Nota', E.head);
+  for (let r = HOL_A; r <= HOL_B; r++) {
+    const h = hol[r - HOL_A];
+    sP.set(r, 1, h ? h.sr : null, E.inDate); sP.set(r, 2, h ? h.t : null, E.inTxt);
+  }
+  sP.set(HOL_A, 3, 'Están precargados los festivos nacionales. Añade los autonómicos y locales de tu zona.', E.small);
+  sP.dv.push({ sqref: 'B5:B6', type: 'decimal', op: 'greaterThanOrEqual', f1: '0', title: 'Valor no válido', msg: 'Escribe un número de horas mayor o igual que 0.' });
+  sP.dv.push({ sqref: 'B7:B8', type: 'list', f1: '"SÍ,NO"', title: 'Valor no válido', msg: 'Elige SÍ o NO.' });
+  sheets.push(sP);
+
+  /* ===== 8. Empleados ===== */
+  const keys = []; emps.forEach(u => Object.keys(u.extras || {}).forEach(k => { if (!keys.includes(k)) keys.push(k); }));
+  const sE = SH(N.emp, 'Datos de los empleados', [28, 32, 16, 34, 16, 16, 10, ...keys.map(() => 20)],
+    ['Nombre', 'Email', 'Teléfono', 'Dirección', 'Alta en la empresa', 'Baja en la empresa', 'Estado', ...keys]);
+  emps.forEach((u, i) => {
+    const r = 5 + i;
+    [u.nombre, u.email, u.telefono || '', u.direccion || '', u.fecha_alta ? fDateStr(u.fecha_alta) : '', u.fecha_baja ? fDateStr(u.fecha_baja) : '', u.activo ? 'Activo' : 'Inactivo', ...keys.map(k => (u.extras || {})[k] || '')]
+      .forEach((v, c) => sE.set(r, c + 1, v, E.txt));
+  });
+
+  /* ===== 9. Fichajes (todos) ===== */
+  const sF = SH(N.fic, 'Todos los fichajes', [12, 10, 28, 10, 12, 12, 13, 24],
+    ['Fecha', 'Hora', 'Empleado', 'Tipo', 'Latitud', 'Longitud', 'Precisión (m)', 'Dispositivo']);
+  all.forEach((r, i) => {
+    const n = 5 + i;
+    sF.set(n, 1, fDate(r.ts)); sF.set(n, 2, fTime(r.ts)); sF.set(n, 3, r.nombre); sF.set(n, 4, TIPOS[r.tipo].l);
+    sF.set(n, 5, +r.latitud, E.lat); sF.set(n, 6, +r.longitud, E.lat);
+    sF.set(n, 7, r.precision_gps != null ? Math.round(r.precision_gps) : null); sF.set(n, 8, r.dispositivo || '');
+  });
+
+  return XL.build(sheets, st);
+}
+
 /* ---------- 3. ESTADO Y SUPABASE ---------- */
 const S = { session:null, perfil:null, empresas:[], empresaId:null, empNombre:'', emps:[], live:[], rows:[], invites:[], mine:[],
             tab:'live', rt:'', timers:[], channel:null, fresh:null, invMode:'new', inv:null, loginRole:'employee', loginTab:'login', flt:null };
@@ -679,12 +1065,11 @@ const A = {
     }
     closeModal(); await loadEmps(); drawTab(); toast('Datos guardados','ok');
   },
-  /* Excel completo: solo administrador */
+  /* Excel completo y listo para imprimir: solo administrador */
   async expXlsx(){
     if(!S.perfil||S.perfil.rol!=='admin') throw new Error('Solo el administrador puede exportar a Excel.');
     if(!S.empresaId) throw new Error('Primero crea una empresa.');
     toast('Preparando el libro de Excel…');
-    if(!window.XLSX) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
     await loadEmps();
     let all=[], from=0; const size=1000;
     for(;;){
@@ -695,38 +1080,8 @@ const A = {
       from+=size;
     }
     const emp=(S.empresas.find(e=>e.id===S.empresaId)||{}).nombre||'Empresa';
-    /* Hoja Empleados (con los campos libres como columnas) */
-    const keys=[]; S.emps.forEach(u=>Object.keys(u.extras||{}).forEach(k=>{ if(!keys.includes(k)) keys.push(k); }));
-    const sE=[['Nombre','Email','Teléfono','Dirección','Alta en la empresa','Baja en la empresa','Estado',...keys],
-      ...S.emps.map(u=>[u.nombre,u.email,u.telefono||'',u.direccion||'',u.fecha_alta?fDateStr(u.fecha_alta):'',u.fecha_baja?fDateStr(u.fecha_baja):'',u.activo?'Activo':'Inactivo',...keys.map(k=>(u.extras||{})[k]||'')])];
-    /* Hoja Fichajes (todos) */
-    const sF=[['Fecha','Hora','Empleado','Tipo','Latitud','Longitud','Precisión (m)','Dispositivo'],
-      ...all.map(r=>[fDate(r.ts),fTime(r.ts),r.nombre,TIPOS[r.tipo].l,+r.latitud,+r.longitud,r.precision_gps!=null?Math.round(r.precision_gps):'',r.dispositivo||''])];
-    /* Horas por día: suma de los tramos cerrados (entrada/reanudar → pausa/salida) */
-    const nameOf=new Map(S.emps.map(u=>[u.id,u.nombre])); all.forEach(r=>{ if(!nameOf.has(r.usuario_id)) nameOf.set(r.usuario_id,r.nombre); });
-    const start=new Map(), days=new Map();
-    for(const r of all){
-      const t=new Date(r.ts).getTime();
-      if(r.tipo==='entrada'||r.tipo==='reanudar'){ if(!start.has(r.usuario_id)) start.set(r.usuario_id,t); }
-      else if(start.has(r.usuario_id)){
-        const s=start.get(r.usuario_id); start.delete(r.usuario_id);
-        const key=r.usuario_id+'|'+isoDay(new Date(s));
-        days.set(key,(days.get(key)||0)+(t-s));
-      }
-    }
-    const rows=[...days.entries()].map(([k,ms])=>{ const p=k.split('|'); return {n:nameOf.get(p[0])||'',d:p[1],ms}; })
-      .sort((a,b)=>a.n.localeCompare(b.n,'es')||a.d.localeCompare(b.d));
-    const sH=[['Empleado','Fecha','Horas trabajadas','Tiempo (h:mm)'],...rows.map(r=>[r.n,fDateStr(r.d),Math.round(r.ms/36e5*100)/100,fmtHM(r.ms)])];
-    const tot=new Map(); rows.forEach(r=>{ const t=tot.get(r.n)||{d:0,ms:0}; t.d++; t.ms+=r.ms; tot.set(r.n,t); });
-    const sR=[['Empleado','Días con fichaje','Horas totales','Tiempo (h:mm)'],...[...tot.entries()].map(([n,t])=>[n,t.d,Math.round(t.ms/36e5*100)/100,fmtHM(t.ms)])];
-    const wb=XLSX.utils.book_new();
-    const add=(name,aoa,widths)=>{ const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=widths.map(w=>({wch:w})); XLSX.utils.book_append_sheet(wb,ws,name); };
-    add('Resumen',sR,[26,18,16,16]);
-    add('Empleados',sE,[26,30,16,34,18,18,10,...keys.map(()=>20)]);
-    add('Fichajes',sF,[12,10,26,10,12,12,14,22]);
-    add('Horas por día',sH,[26,12,18,16]);
-    const out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
-    download('FichajeGPS_'+emp.replace(/[^\w\-]+/g,'_')+'_'+isoDay(new Date())+'.xlsx',out,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const bytes=buildHorasXlsx(emp,S.emps,all);
+    download('FichajeGPS_'+emp.replace(/[^\w\-]+/g,'_')+'_'+isoDay(new Date())+'.xlsx',bytes,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     toast('Excel generado: '+all.length+' fichajes','ok');
   },
   async toggleEmp(el){
